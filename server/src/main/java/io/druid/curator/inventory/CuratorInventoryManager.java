@@ -19,8 +19,6 @@
 
 package io.druid.curator.inventory;
 
-import com.google.common.base.Function;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Sets;
 import io.druid.curator.cache.PathChildrenCacheFactory;
@@ -37,10 +35,12 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener;
 import org.apache.curator.utils.ZKPaths;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * An InventoryManager watches updates to inventory on Zookeeper (or some other discovery-like service publishing
@@ -160,19 +160,12 @@ public class CuratorInventoryManager<ContainerClass, InventoryClass>
     return containerHolder == null ? null : containerHolder.getContainer();
   }
 
-  public Iterable<ContainerClass> getInventory()
+  public Collection<ContainerClass> getInventory()
   {
-    return Iterables.transform(
-        containers.values(),
-        new Function<ContainerHolder, ContainerClass>()
-        {
-          @Override
-          public ContainerClass apply(ContainerHolder input)
-          {
-            return input.getContainer();
-          }
-        }
-    );
+    return containers.values()
+                     .stream()
+                     .map(ContainerHolder::getContainer)
+                     .collect(Collectors.toList());
   }
 
   private byte[] getZkDataForNode(String path)

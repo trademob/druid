@@ -19,6 +19,7 @@
 
 package io.druid.client;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import io.druid.server.coordination.DruidServerMetadata;
 import io.druid.server.coordination.ServerType;
@@ -42,7 +43,7 @@ public class ImmutableDruidServer
       ImmutableMap<String, DataSegment> segments
   )
   {
-    this.metadata = metadata;
+    this.metadata = Preconditions.checkNotNull(metadata);
     this.currSize = currSize;
     this.segments = segments;
     this.dataSources = dataSources;
@@ -117,5 +118,30 @@ public class ImmutableDruidServer
            + "', size='" + currSize
            + "', sources='" + dataSources
            + "'}";
+  }
+
+  @Override
+  public boolean equals(Object o)
+  {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    ImmutableDruidServer that = (ImmutableDruidServer) o;
+
+    if (metadata.equals(that.metadata)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  @Override
+  public int hashCode()
+  {
+    return metadata.hashCode();
   }
 }

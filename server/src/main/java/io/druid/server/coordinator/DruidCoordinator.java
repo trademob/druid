@@ -23,7 +23,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
@@ -41,7 +40,6 @@ import io.druid.client.ServerInventoryView;
 import io.druid.client.coordinator.Coordinator;
 import io.druid.client.indexing.IndexingServiceClient;
 import io.druid.common.config.JacksonConfigManager;
-import io.druid.java.util.common.concurrent.Execs;
 import io.druid.curator.discovery.ServiceAnnouncer;
 import io.druid.discovery.DruidLeaderSelector;
 import io.druid.guice.ManageLifecycle;
@@ -49,7 +47,9 @@ import io.druid.guice.annotations.CoordinatorIndexingServiceHelper;
 import io.druid.guice.annotations.Self;
 import io.druid.java.util.common.DateTimes;
 import io.druid.java.util.common.IAE;
+import io.druid.java.util.common.ISE;
 import io.druid.java.util.common.Pair;
+import io.druid.java.util.common.concurrent.Execs;
 import io.druid.java.util.common.concurrent.ScheduledExecutorFactory;
 import io.druid.java.util.common.concurrent.ScheduledExecutors;
 import io.druid.java.util.common.guava.Comparators;
@@ -87,6 +87,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.stream.Collectors;
 
 /**
  */
@@ -289,7 +290,7 @@ public class DruidCoordinator
   public Map<String, Double> getLoadStatus()
   {
     Map<String, Double> loadStatus = Maps.newHashMap();
-    for (DruidDataSource dataSource : metadataSegmentManager.getInventory()) {
+    for (ImmutableDruidDataSource dataSource : metadataSegmentManager.getInventory()) {
       final Set<DataSegment> segments = Sets.newHashSet(dataSource.getSegments());
       final int availableSegmentSize = segments.size();
 
@@ -325,16 +326,6 @@ public class DruidCoordinator
     metadataSegmentManager.removeSegment(segment.getDataSource(), segment.getIdentifier());
   }
 
-  public void removeDatasource(String ds)
-  {
-    metadataSegmentManager.removeDatasource(ds);
-  }
-
-  public void enableDatasource(String ds)
-  {
-    metadataSegmentManager.enableDatasource(ds);
-  }
-
   public String getCurrentLeader()
   {
     return coordLeaderSelector.getCurrentLeader();
@@ -352,6 +343,7 @@ public class DruidCoordinator
       if (callback != null) {
         callback.execute();
       }
+      throw new ISE("Cannot move null DataSegment");
     }
     String segmentName = segment.getIdentifier();
     try {
@@ -359,7 +351,7 @@ public class DruidCoordinator
         throw new IAE("Cannot move [%s] to and from the same server [%s]", segmentName, fromServer.getName());
       }
 
-      DruidDataSource dataSource = metadataSegmentManager.getInventoryValue(segment.getDataSource());
+      ImmutableDruidDataSource dataSource = metadataSegmentManager.getInventoryValue(segment.getDataSource());
       if (dataSource == null) {
         throw new IAE("Unable to find dataSource for segment [%s] in metadata", segmentName);
       }
@@ -459,21 +451,12 @@ public class DruidCoordinator
     return availableSegments;
   }
 
-  public Iterable<DataSegment> getAvailableDataSegments()
+  private List<DataSegment> getAvailableDataSegments()
   {
-    return Iterables.concat(
-        Iterables.transform(
-            metadataSegmentManager.getInventory(),
-            new Function<DruidDataSource, Iterable<DataSegment>>()
-            {
-              @Override
-              public Iterable<DataSegment> apply(DruidDataSource input)
-              {
-                return input.getSegments();
-              }
-            }
-        )
-    );
+    return metadataSegmentManager.getInventory()
+                                 .stream()
+                                 .flatMap(source -> source.getSegments().stream())
+                                 .collect(Collectors.toList());
   }
 
   @LifecycleStart

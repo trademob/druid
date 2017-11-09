@@ -35,12 +35,13 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.inject.Inject;
 import com.metamx.emitter.EmittingLogger;
 import io.druid.client.DruidDataSource;
-import io.druid.java.util.common.concurrent.Execs;
+import io.druid.client.ImmutableDruidDataSource;
 import io.druid.guice.ManageLifecycle;
 import io.druid.java.util.common.DateTimes;
 import io.druid.java.util.common.Intervals;
 import io.druid.java.util.common.MapUtils;
 import io.druid.java.util.common.StringUtils;
+import io.druid.java.util.common.concurrent.Execs;
 import io.druid.java.util.common.lifecycle.LifecycleStart;
 import io.druid.java.util.common.lifecycle.LifecycleStop;
 import io.druid.timeline.DataSegment;
@@ -63,6 +64,7 @@ import org.skife.jdbi.v2.tweak.HandleCallback;
 import org.skife.jdbi.v2.tweak.ResultSetMapper;
 import org.skife.jdbi.v2.util.ByteArrayMapper;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -74,6 +76,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  */
@@ -386,15 +389,21 @@ public class SQLMetadataSegmentManager implements MetadataSegmentManager
   }
 
   @Override
-  public DruidDataSource getInventoryValue(String key)
+  @Nullable
+  public ImmutableDruidDataSource getInventoryValue(String key)
   {
-    return dataSources.get().get(key);
+    final DruidDataSource dataSource = dataSources.get().get(key);
+    return dataSource == null ? null : dataSource.toImmutableDruidDataSource();
   }
 
   @Override
-  public Collection<DruidDataSource> getInventory()
+  public Collection<ImmutableDruidDataSource> getInventory()
   {
-    return dataSources.get().values();
+    return dataSources.get()
+                      .values()
+                      .stream()
+                      .map(DruidDataSource::toImmutableDruidDataSource)
+                      .collect(Collectors.toList());
   }
 
   @Override
@@ -522,7 +531,7 @@ public class SQLMetadataSegmentManager implements MetadataSegmentManager
         }
 
         if (!dataSource.getSegments().contains(segment)) {
-          dataSource.addSegment(segment.getIdentifier(), segment);
+          dataSource.addSegment(segment);
         }
       }
 
@@ -559,7 +568,8 @@ public class SQLMetadataSegmentManager implements MetadataSegmentManager
                 .createQuery(
                     StringUtils.format(
                         "SELECT start, %2$send%2$s FROM %1$s WHERE dataSource = :dataSource and start >= :start and %2$send%2$s <= :end and used = false ORDER BY start, %2$send%2$s",
-                        getSegmentsTable(), connector.getQuoteString()
+                        getSegmentsTable(),
+                        connector.getQuoteString()
                     )
                 )
                 .setFetchSize(connector.getStreamingFetchSize())

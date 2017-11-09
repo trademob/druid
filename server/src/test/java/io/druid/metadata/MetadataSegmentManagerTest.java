@@ -113,7 +113,7 @@ public class MetadataSegmentManagerTest
     );
     Assert.assertEquals(
         ImmutableSet.of(segment1, segment2),
-        manager.getInventoryValue("wikipedia").getSegments()
+        ImmutableSet.copyOf(manager.getInventoryValue("wikipedia").getSegments())
     );
     manager.stop();
   }
