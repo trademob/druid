@@ -86,7 +86,6 @@ import org.joda.time.DateTime;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1884,13 +1883,13 @@ public class KafkaSupervisor implements Supervisor
     synchronized (consumerLock) {
       TopicPartition topicPartition = new TopicPartition(ioConfig.getTopic(), partition);
       if (!consumer.assignment().contains(topicPartition)) {
-        consumer.assign(Collections.singletonList(topicPartition));
+        consumer.assign(Lists.newArrayList(topicPartition));
       }
 
       if (useEarliestOffset) {
-        consumer.seekToBeginning(Collections.singletonList(topicPartition));
+        consumer.seekToBeginning(topicPartition);
       } else {
-        consumer.seekToEnd(Collections.singletonList(topicPartition));
+        consumer.seekToEnd(topicPartition);
       }
 
       return consumer.position(topicPartition);
@@ -2086,8 +2085,8 @@ public class KafkaSupervisor implements Supervisor
                                                         .stream()
                                                         .map(x -> new TopicPartition(x.topic(), x.partition()))
                                                         .collect(Collectors.toSet());
-      consumer.assign(topicPartitions);
-      consumer.seekToEnd(topicPartitions);
+      consumer.assign(Lists.newArrayList(topicPartitions));
+      consumer.seekToEnd(topicPartitions.toArray(new TopicPartition[topicPartitions.size()]));
 
       latestOffsetsFromKafka = topicPartitions
           .stream()

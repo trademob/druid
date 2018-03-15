@@ -123,7 +123,6 @@ import javax.ws.rs.core.Response;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1966,7 +1965,7 @@ public class KafkaIndexTask extends AbstractTask implements ChatHandler
         final TopicPartition topicPartition = outOfRangePartition.getKey();
         final long nextOffset = outOfRangePartition.getValue();
         // seek to the beginning to get the least available offset
-        consumer.seekToBeginning(Collections.singletonList(topicPartition));
+        consumer.seekToBeginning(topicPartition);
         final long leastAvailableOffset = consumer.position(topicPartition);
         // reset the seek
         consumer.seek(topicPartition, nextOffset);
