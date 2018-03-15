@@ -141,6 +141,8 @@ public class JavaScriptAggregatorFactory extends AggregatorFactory
   @Override
   public AggregateCombiner makeAggregateCombiner()
   {
+    checkCompiledScript();
+
     return new DoubleAggregateCombiner()
     {
       private double combined;
@@ -154,7 +156,7 @@ public class JavaScriptAggregatorFactory extends AggregatorFactory
       @Override
       public void fold(ColumnValueSelector selector)
       {
-        combined = getCompiledScript().combine(combined, selector.getDouble());
+        combined = compiledScript.combine(combined, selector.getDouble());
       }
 
       @Override
