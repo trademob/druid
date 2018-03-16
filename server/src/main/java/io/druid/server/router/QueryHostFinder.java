@@ -90,7 +90,7 @@ public class QueryHostFinder
     return chosenServer;
   }
 
-  public <T> Server getServer(Query<T> query)
+  public <T> Server pickServer(Query<T> query)
   {
     Server server = findServer(query);
 
@@ -107,7 +107,7 @@ public class QueryHostFinder
     return server;
   }
 
-  public Server getDefaultServer()
+  public Server pickDefaultServer()
   {
     Server server = findDefaultServer();
 
