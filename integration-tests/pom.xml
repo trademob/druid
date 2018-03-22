@@ -26,7 +26,7 @@
     <parent>
         <groupId>io.druid</groupId>
         <artifactId>druid</artifactId>
-        <version>druid-0.12.0-iap5-SNAPSHOT</version>
+        <version>0.12.0-iap4</version>
     </parent>
 
     <properties>
