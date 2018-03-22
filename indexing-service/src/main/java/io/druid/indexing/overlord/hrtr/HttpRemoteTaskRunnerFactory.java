@@ -22,7 +22,6 @@ package io.druid.indexing.overlord.hrtr;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Supplier;
 import com.google.inject.Inject;
-import com.metamx.http.client.HttpClient;
 import io.druid.discovery.DruidNodeDiscoveryProvider;
 import io.druid.guice.annotations.EscalatedGlobal;
 import io.druid.guice.annotations.Smile;
@@ -33,6 +32,7 @@ import io.druid.indexing.overlord.autoscaling.ProvisioningSchedulerConfig;
 import io.druid.indexing.overlord.autoscaling.ProvisioningStrategy;
 import io.druid.indexing.overlord.config.HttpRemoteTaskRunnerConfig;
 import io.druid.indexing.overlord.setup.WorkerBehaviorConfig;
+import io.druid.java.util.http.client.HttpClient;
 import io.druid.server.initialization.IndexerZkConfig;
 import org.apache.curator.framework.CuratorFramework;
 

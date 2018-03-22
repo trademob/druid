@@ -20,7 +20,6 @@
 package io.druid.indexing.overlord.hrtr;
 
 import com.google.common.collect.ImmutableList;
-import com.metamx.http.client.HttpClient;
 import io.druid.indexer.TaskLocation;
 import io.druid.indexing.common.TaskStatus;
 import io.druid.indexing.common.task.NoopTask;
@@ -29,6 +28,7 @@ import io.druid.indexing.overlord.config.HttpRemoteTaskRunnerConfig;
 import io.druid.indexing.worker.TaskAnnouncement;
 import io.druid.indexing.worker.Worker;
 import io.druid.indexing.worker.WorkerHistoryItem;
+import io.druid.java.util.http.client.HttpClient;
 import io.druid.segment.TestHelper;
 import io.druid.server.coordination.ChangeRequestHttpSyncer;
 import org.easymock.EasyMock;
