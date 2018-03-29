@@ -20,7 +20,7 @@
 package io.druid.server.coordinator.helper;
 
 import com.google.common.collect.Lists;
-import com.metamx.common.guava.Comparators;
+import com.google.common.collect.Ordering;
 import com.metamx.emitter.EmittingLogger;
 import io.druid.java.util.common.DateTimes;
 import io.druid.metadata.MetadataRuleManager;
@@ -92,7 +92,7 @@ public class DruidCoordinatorRuleRunner implements DruidCoordinatorHelper
     for (DataSegment segment : params.getAvailableSegments()) {
       VersionedIntervalTimeline<String, DataSegment> timeline = timelines.get(segment.getDataSource());
       if (timeline == null) {
-        timeline = new VersionedIntervalTimeline<>(Comparators.comparable());
+        timeline = new VersionedIntervalTimeline<>(Ordering.natural());
         timelines.put(segment.getDataSource(), timeline);
       }
 

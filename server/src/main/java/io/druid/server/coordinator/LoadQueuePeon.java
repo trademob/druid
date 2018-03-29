@@ -34,7 +34,6 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorWatcher;
 import org.apache.curator.utils.ZKPaths;
 import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.data.Stat;
 
 import java.util.Collection;
@@ -50,8 +49,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- */
 public class LoadQueuePeon
 {
   private static final EmittingLogger log = new EmittingLogger(LoadQueuePeon.class);
@@ -237,7 +234,7 @@ public class LoadQueuePeon
       if (currentlyProcessing == null) {
         if (!stopped) {
           log.makeAlert("Crazy race condition! server[%s]", basePath)
-              .emit();
+             .emit();
         }
         actionCompleted();
         return;
@@ -249,19 +246,14 @@ public class LoadQueuePeon
       curator.create().withMode(CreateMode.EPHEMERAL).forPath(path, payload);
 
       processingExecutor.schedule(
-          new Runnable()
-          {
-            @Override
-            public void run()
-            {
-              try {
-                if (curator.checkExists().forPath(path) != null) {
-                  failAssign(new ISE("%s was never removed! Failing this operation!", path));
-                }
+          () -> {
+            try {
+              if (curator.checkExists().forPath(path) != null) {
+                failAssign(new ISE("%s was never removed! Failing this operation!", path));
               }
-              catch (Exception e) {
-                failAssign(e);
-              }
+            }
+            catch (Exception e) {
+              failAssign(e);
             }
           },
           config.getLoadTimeoutDelay().getMillis(),
@@ -269,18 +261,13 @@ public class LoadQueuePeon
       );
 
       final Stat stat = curator.checkExists().usingWatcher(
-          new CuratorWatcher()
-          {
-            @Override
-            public void process(WatchedEvent watchedEvent) throws Exception
-            {
-              switch (watchedEvent.getType()) {
+          (CuratorWatcher) watchedEvent -> {
+            switch (watchedEvent.getType()) {
               case NodeDeleted:
                 entryRemoved(watchedEvent.getPath());
                 break;
               default:
                 // do nothing
-              }
             }
           }
       ).forPath(path);
@@ -329,14 +316,7 @@ public class LoadQueuePeon
       final List<LoadPeonCallback> callbacks = currentlyProcessing.getCallbacks();
       currentlyProcessing = null;
       callBackExecutor.execute(
-          new Runnable()
-          {
-            @Override
-            public void run()
-            {
-              executeCallbacks(callbacks);
-            }
-          }
+          () -> executeCallbacks(callbacks)
       );
     }
   }
