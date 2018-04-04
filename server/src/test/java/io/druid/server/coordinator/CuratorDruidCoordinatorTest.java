@@ -121,6 +121,7 @@ public class CuratorDruidCoordinatorTest extends CuratorTestBase
             EasyMock.anyObject()
         )
     ).andReturn(new AtomicReference(CoordinatorDynamicConfig.builder().build())).anyTimes();
+    /*
     EasyMock.expect(
         configManager.watch(
             EasyMock.eq(CoordinatorCompactionConfig.CONFIG_KEY),
@@ -129,6 +130,7 @@ public class CuratorDruidCoordinatorTest extends CuratorTestBase
         )
     ).andReturn(new AtomicReference(CoordinatorCompactionConfig.empty())).anyTimes();
     EasyMock.replay(configManager);
+    */
 
     setupServerAndCurator();
     curator.start();
