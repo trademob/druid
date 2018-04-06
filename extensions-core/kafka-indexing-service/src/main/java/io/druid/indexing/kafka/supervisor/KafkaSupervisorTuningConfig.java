@@ -56,7 +56,10 @@ public class KafkaSupervisorTuningConfig extends KafkaTuningConfig
       @JsonProperty("chatRetries") Long chatRetries,
       @JsonProperty("httpTimeout") Period httpTimeout,
       @JsonProperty("shutdownTimeout") Period shutdownTimeout,
-      @JsonProperty("offsetFetchPeriod") Period offsetFetchPeriod
+      @JsonProperty("offsetFetchPeriod") Period offsetFetchPeriod,
+      @JsonProperty("logParseExceptions") @Nullable Boolean logParseExceptions,
+      @JsonProperty("maxParseExceptions") @Nullable Integer maxParseExceptions,
+      @JsonProperty("maxSavedParseExceptions") @Nullable Integer maxSavedParseExceptions
   )
   {
     super(
@@ -70,7 +73,10 @@ public class KafkaSupervisorTuningConfig extends KafkaTuningConfig
         reportParseExceptions,
         handoffConditionTimeout,
         resetOffsetAutomatically,
-        segmentWriteOutMediumFactory
+        segmentWriteOutMediumFactory,
+        logParseExceptions,
+        maxParseExceptions,
+        maxSavedParseExceptions
     );
 
     this.workerThreads = workerThreads;
@@ -137,6 +143,9 @@ public class KafkaSupervisorTuningConfig extends KafkaTuningConfig
            ", httpTimeout=" + httpTimeout +
            ", shutdownTimeout=" + shutdownTimeout +
            ", offsetFetchPeriod=" + offsetFetchPeriod +
+           ", logParseExceptions=" + isLogParseExceptions() +
+           ", maxParseExceptions=" + getMaxParseExceptions() +
+           ", maxSavedParseExceptions=" + getMaxSavedParseExceptions() +
            '}';
   }
 

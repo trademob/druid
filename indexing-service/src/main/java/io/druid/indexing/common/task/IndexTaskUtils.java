@@ -22,6 +22,20 @@ package io.druid.indexing.common.task;
 import io.druid.indexer.TaskStatus;
 import io.druid.java.util.emitter.service.ServiceMetricEvent;
 import io.druid.query.DruidMetrics;
+import io.druid.server.security.Access;
+import io.druid.server.security.Action;
+import io.druid.server.security.AuthorizationUtils;
+import io.druid.server.security.AuthorizerMapper;
+import io.druid.server.security.ForbiddenException;
+import io.druid.server.security.Resource;
+import io.druid.server.security.ResourceAction;
+import io.druid.server.security.ResourceType;
+import io.druid.utils.CircularBuffer;
+
+import javax.annotation.Nullable;
+import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
+import java.util.List;
 
 public class IndexTaskUtils
 {
@@ -39,5 +53,45 @@ public class IndexTaskUtils
   {
     metricBuilder.setDimension(DruidMetrics.TASK_ID, taskStatus.getId());
     metricBuilder.setDimension(DruidMetrics.TASK_STATUS, taskStatus.getStatusCode().toString());
+  }
+
+  @Nullable
+  public static List<String> getMessagesFromSavedParseExceptions(CircularBuffer<Throwable> savedParseExceptions)
+  {
+    if (savedParseExceptions == null) {
+      return null;
+    }
+
+    List<String> events = new ArrayList<>();
+    for (int i = 0; i < savedParseExceptions.size(); i++) {
+      events.add(savedParseExceptions.getLatest(i).getMessage());
+    }
+
+    return events;
+  }
+
+  /**
+   * Authorizes action to be performed on a task's datasource
+   *
+   * @return authorization result
+   */
+  public static Access datasourceAuthorizationCheck(
+      final HttpServletRequest req,
+      Action action,
+      String datasource,
+      AuthorizerMapper authorizerMapper
+  )
+  {
+    ResourceAction resourceAction = new ResourceAction(
+        new Resource(datasource, ResourceType.DATASOURCE),
+        action
+    );
+
+    Access access = AuthorizationUtils.authorizeResourceAction(req, resourceAction, authorizerMapper);
+    if (!access.isAllowed()) {
+      throw new ForbiddenException(access.toString());
+    }
+
+    return access;
   }
 }

@@ -38,6 +38,7 @@ public class TaskStatusPlus
   private final Long duration;
   private final TaskLocation location;
   private final String dataSource;
+
   @Nullable
   private final String errorMsg;
 
