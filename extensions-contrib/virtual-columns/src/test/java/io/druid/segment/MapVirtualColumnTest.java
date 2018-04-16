@@ -196,7 +196,7 @@ public class MapVirtualColumnTest
     return map;
   }
 
-  private void checkSelectQuery(SelectQuery searchQuery, List<Map> expected) throws Exception
+  private void checkSelectQuery(SelectQuery searchQuery, List<Map> expected)
   {
     List<Result<SelectResultValue>> results = Sequences.toList(
         runner.run(QueryPlus.wrap(searchQuery), ImmutableMap.of()),
