@@ -46,6 +46,8 @@ import java.util.Objects;
 @JsonTypeName("timeseries")
 public class TimeseriesQuery extends BaseQuery<Result<TimeseriesResultValue>>
 {
+  static final String CTX_GRAND_TOTAL = "grandTotal";
+
   private final VirtualColumns virtualColumns;
   private final DimFilter dimFilter;
   private final List<AggregatorFactory> aggregatorSpecs;
@@ -126,6 +128,11 @@ public class TimeseriesQuery extends BaseQuery<Result<TimeseriesResultValue>>
   public int getLimit()
   {
     return limit;
+  }
+
+  public boolean isGrandTotal()
+  {
+    return getContextBoolean(CTX_GRAND_TOTAL, false);
   }
 
   public boolean isSkipEmptyBuckets()
