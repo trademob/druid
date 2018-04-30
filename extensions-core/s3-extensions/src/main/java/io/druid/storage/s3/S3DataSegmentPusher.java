@@ -87,10 +87,10 @@ public class S3DataSegmentPusher implements DataSegmentPusher
   }
 
   @Override
-  public DataSegment push(final File indexFilesDir, final DataSegment inSegment, final boolean replaceExisting)
+  public DataSegment push(final File indexFilesDir, final DataSegment inSegment, final boolean useUniquePath)
       throws IOException
   {
-    final String s3Path = S3Utils.constructSegmentPath(config.getBaseKey(), getStorageDir(inSegment));
+    final String s3Path = S3Utils.constructSegmentPath(config.getBaseKey(), getStorageDir(inSegment, useUniquePath));
 
     log.info("Copying segment[%s] to S3 at location[%s]", inSegment.getIdentifier(), s3Path);
 
@@ -101,7 +101,7 @@ public class S3DataSegmentPusher implements DataSegmentPusher
       return S3Utils.retryS3Operation(
           () -> {
             S3Object toPush = new S3Object(zipOutFile);
-            putObject(config.getBucket(), s3Path, toPush, replaceExisting);
+            putObject(config.getBucket(), s3Path, toPush);
 
             final DataSegment outSegment = inSegment.withSize(indexSize)
                                                     .withLoadSpec(makeLoadSpec(config.getBucket(), toPush.getKey()))
@@ -116,8 +116,7 @@ public class S3DataSegmentPusher implements DataSegmentPusher
             putObject(
                 config.getBucket(),
                 S3Utils.descriptorPathForSegmentPath(s3Path),
-                descriptorObject,
-                replaceExisting
+                descriptorObject
             );
 
             log.info("Deleting zipped index File[%s]", zipOutFile);
@@ -163,8 +162,7 @@ public class S3DataSegmentPusher implements DataSegmentPusher
     );
   }
 
-  private void putObject(String bucketName, String path, S3Object object, boolean replaceExisting)
-      throws ServiceException
+  private void putObject(String bucketName, String path, S3Object object) throws ServiceException
   {
     object.setBucketName(bucketName);
     object.setKey(path);
@@ -174,10 +172,6 @@ public class S3DataSegmentPusher implements DataSegmentPusher
 
     log.info("Pushing %s.", object);
 
-    if (!replaceExisting && S3Utils.isObjectInBucket(s3Client, bucketName, object.getKey())) {
-      log.info("Skipping push because key [%s] exists && replaceExisting == false", object.getKey());
-    } else {
-      s3Client.putObject(bucketName, object);
-    }
+    s3Client.putObject(bucketName, object);
   }
 }

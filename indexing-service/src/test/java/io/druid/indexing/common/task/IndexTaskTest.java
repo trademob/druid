@@ -58,7 +58,9 @@ import io.druid.segment.indexing.DataSchema;
 import io.druid.segment.indexing.granularity.ArbitraryGranularitySpec;
 import io.druid.segment.indexing.granularity.GranularitySpec;
 import io.druid.segment.indexing.granularity.UniformGranularitySpec;
+import io.druid.segment.loading.DataSegmentKiller;
 import io.druid.segment.loading.DataSegmentPusher;
+import io.druid.segment.loading.SegmentLoadingException;
 import io.druid.segment.realtime.appenderator.SegmentIdentifier;
 import io.druid.segment.realtime.firehose.LocalFirehoseFactory;
 import io.druid.segment.transform.ExpressionTransform;
@@ -648,7 +650,7 @@ public class IndexTaskTest
     File tmpDir = temporaryFolder.newFolder();
     File tmpFile = File.createTempFile("druid", "index", tmpDir);
 
-   populateRollupTestData(tmpFile);
+    populateRollupTestData(tmpFile);
 
     IndexTask indexTask = new IndexTask(
         null,
@@ -999,10 +1001,22 @@ public class IndexTaskTest
           {
             throw new UnsupportedOperationException();
           }
-        }, null, null, null, null, null, null, null, null, null, null, jsonMapper, temporaryFolder.newFolder(),
+        }, new DataSegmentKiller()
+        {
+          @Override
+          public void kill(DataSegment segment) throws SegmentLoadingException
+          {
+
+          }
+
+          @Override
+          public void killAll() throws IOException
+          {
+
+          }
+        }, null, null, null, null, null, null, null, null, null, jsonMapper, temporaryFolder.newFolder(),
             indexIO, null, null, indexMergerV9, null, null, null, null
         )
-
     );
 
     Collections.sort(segments);

@@ -201,6 +201,7 @@ public class SameIntervalMergeTaskTest
             segments.add(segment);
             return segment;
           }
+
           @Override
           public Map<String, Object> makeLoadSpec(URI finalIndexZipFilePath)
           {

@@ -1744,9 +1744,9 @@ public class KafkaIndexTaskTest
 
   private List<String> readSegmentColumn(final String column, final SegmentDescriptor descriptor) throws IOException
   {
-    File indexZip = new File(
+    File indexBasePath = new File(
         StringUtils.format(
-            "%s/%s/%s_%s/%s/%d/index.zip",
+            "%s/%s/%s_%s/%s/%d",
             getSegmentDirectory(),
             DATA_SCHEMA.getDataSource(),
             descriptor.getInterval().getStart(),
@@ -1755,6 +1755,7 @@ public class KafkaIndexTaskTest
             descriptor.getPartitionNumber()
         )
     );
+
     File outputLocation = new File(
         directory,
         StringUtils.format(
@@ -1767,7 +1768,7 @@ public class KafkaIndexTaskTest
     );
     outputLocation.mkdir();
     CompressionUtils.unzip(
-        Files.asByteSource(indexZip),
+        Files.asByteSource(new File(indexBasePath.listFiles()[0], "index.zip")),
         outputLocation,
         Predicates.<Throwable>alwaysFalse(),
         false

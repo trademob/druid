@@ -71,8 +71,6 @@ import io.druid.segment.TestHelper;
 import io.druid.segment.column.Column;
 import io.druid.segment.incremental.IncrementalIndex;
 import io.druid.segment.incremental.IncrementalIndexSchema;
-import io.druid.segment.transform.ExpressionTransform;
-import io.druid.segment.transform.TransformSpec;
 import io.druid.segment.loading.DataSegmentArchiver;
 import io.druid.segment.loading.DataSegmentKiller;
 import io.druid.segment.loading.DataSegmentMover;
@@ -85,6 +83,8 @@ import io.druid.segment.loading.SegmentLoadingException;
 import io.druid.segment.loading.StorageLocationConfig;
 import io.druid.segment.realtime.firehose.IngestSegmentFirehose;
 import io.druid.segment.realtime.plumber.SegmentHandoffNotifierFactory;
+import io.druid.segment.transform.ExpressionTransform;
+import io.druid.segment.transform.TransformSpec;
 import io.druid.server.metrics.NoopServiceEmitter;
 import io.druid.timeline.DataSegment;
 import io.druid.timeline.partition.NumberedShardSpec;
@@ -171,7 +171,8 @@ public class IngestSegmentFirehoseFactoryTest
       }
 
       @Override
-      public List<DataSegment> getUsedSegmentsForIntervals(String dataSource, List<Interval> interval) throws IOException
+      public List<DataSegment> getUsedSegmentsForIntervals(String dataSource, List<Interval> interval)
+          throws IOException
       {
         return ImmutableList.copyOf(segmentSet);
       }
@@ -228,7 +229,7 @@ public class IngestSegmentFirehoseFactoryTest
           }
 
           @Override
-          public DataSegment push(File file, DataSegment segment, boolean replaceExisting) throws IOException
+          public DataSegment push(File file, DataSegment segment, boolean useUniquePath)
           {
             return segment;
           }

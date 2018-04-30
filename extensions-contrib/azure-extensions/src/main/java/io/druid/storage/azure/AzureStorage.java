@@ -77,27 +77,14 @@ public class AzureStorage
     }
 
     return deletedFiles;
-
   }
 
-  public void uploadBlob(
-      final File file,
-      final String containerName,
-      final String blobPath,
-      final boolean replaceExisting
-  )
+  public void uploadBlob(final File file, final String containerName, final String blobPath)
       throws IOException, StorageException, URISyntaxException
-
   {
     CloudBlobContainer container = getCloudBlobContainer(containerName);
     try (FileInputStream stream = new FileInputStream(file)) {
-      CloudBlockBlob blob = container.getBlockBlobReference(blobPath);
-
-      if (!replaceExisting && blob.exists()) {
-        log.info("Skipping push because blob [%s] exists && replaceExisting == false", blobPath);
-      } else {
-        blob.upload(stream, file.length());
-      }
+      container.getBlockBlobReference(blobPath).upload(stream, file.length());
     }
   }
 

@@ -236,7 +236,14 @@ public class ConvertSegmentTask extends AbstractFixedIntervalTask
       segmentsToUpdate = Collections.singleton(segment);
     }
     // Vestigial from a past time when this task spawned subtasks.
-    for (final Task subTask : generateSubTasks(getGroupId(), segmentsToUpdate, indexSpec, force, validate, getContext())) {
+    for (final Task subTask : generateSubTasks(
+        getGroupId(),
+        segmentsToUpdate,
+        indexSpec,
+        force,
+        validate,
+        getContext()
+    )) {
       final TaskStatus status = subTask.run(toolbox);
       if (!status.isSuccess()) {
         return TaskStatus.fromCode(getId(), status.getStatusCode());
@@ -397,7 +404,7 @@ public class ConvertSegmentTask extends AbstractFixedIntervalTask
       // Appending to the version makes a new version that inherits most comparability parameters of the original
       // version, but is "newer" than said original version.
       DataSegment updatedSegment = segment.withVersion(StringUtils.format("%s_v%s", segment.getVersion(), outVersion));
-      updatedSegment = toolbox.getSegmentPusher().push(outLocation, updatedSegment, true);
+      updatedSegment = toolbox.getSegmentPusher().push(outLocation, updatedSegment, false);
 
       actionClient.submit(new SegmentInsertAction(Sets.newHashSet(updatedSegment)));
     } else {

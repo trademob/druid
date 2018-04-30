@@ -484,7 +484,7 @@ public class TaskLifecycleTest
       }
 
       @Override
-      public DataSegment push(File file, DataSegment segment, boolean replaceExisting) throws IOException
+      public DataSegment push(File file, DataSegment segment, boolean useUniquePath)
       {
         pushedSegments++;
         return segment;
@@ -526,8 +526,11 @@ public class TaskLifecycleTest
     Preconditions.checkNotNull(emitter);
 
     taskLockbox = new TaskLockbox(taskStorage);
-    tac = new LocalTaskActionClientFactory(taskStorage, new TaskActionToolbox(taskLockbox, mdc, emitter, EasyMock.createMock(
-        SupervisorManager.class)));
+    tac = new LocalTaskActionClientFactory(
+        taskStorage,
+        new TaskActionToolbox(taskLockbox, mdc, emitter, EasyMock.createMock(
+            SupervisorManager.class))
+    );
     File tmpDir = temporaryFolder.newFolder();
     taskConfig = new TaskConfig(tmpDir.toString(), null, null, 50000, null, false, null, null);
 
@@ -1034,7 +1037,7 @@ public class TaskLifecycleTest
       }
 
       @Override
-      public DataSegment push(File file, DataSegment dataSegment, boolean replaceExisting) throws IOException
+      public DataSegment push(File file, DataSegment dataSegment, boolean useUniquePath)
       {
         throw new RuntimeException("FAILURE");
       }
