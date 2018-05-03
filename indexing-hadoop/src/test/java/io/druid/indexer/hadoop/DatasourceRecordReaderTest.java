@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import io.druid.data.input.InputRow;
-import io.druid.indexer.HadoopDruidIndexerConfig;
 import io.druid.jackson.DefaultObjectMapper;
 import io.druid.query.aggregation.hyperloglog.HyperUniquesAggregatorFactory;
 import io.druid.timeline.DataSegment;
@@ -35,6 +34,7 @@ import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -58,21 +58,21 @@ public class DatasourceRecordReaderTest
     InputSplit split = new DatasourceInputSplit(Lists.newArrayList(WindowedDataSegment.of(segment)), null);
 
     Configuration config = new Configuration();
-    config.set(
-        DatasourceInputFormat.CONF_DRUID_SCHEMA,
-        HadoopDruidIndexerConfig.JSON_MAPPER.writeValueAsString(
-            new DatasourceIngestionSpec(
-                segment.getDataSource(),
-                segment.getInterval(),
-                null,
-                null,
-                null,
-                segment.getDimensions(),
-                segment.getMetrics(),
-                false,
-                null
-            )
-        )
+    DatasourceInputFormat.addDataSource(
+        config,
+        new DatasourceIngestionSpec(
+            segment.getDataSource(),
+            segment.getInterval(),
+            null,
+            null,
+            null,
+            segment.getDimensions(),
+            segment.getMetrics(),
+            false,
+            null
+        ),
+        Collections.emptyList(),
+        0
     );
 
     TaskAttemptContext context = EasyMock.createNiceMock(TaskAttemptContext.class);
