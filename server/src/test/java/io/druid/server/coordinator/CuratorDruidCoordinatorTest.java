@@ -104,7 +104,7 @@ public class CuratorDruidCoordinatorTest extends CuratorTestBase
 
   public CuratorDruidCoordinatorTest()
   {
-    jsonMapper = TestHelper.makeJsonMapper();
+    jsonMapper = TestHelper.getJsonMapper();
     zkPathsConfig = new ZkPathsConfig();
   }
 
@@ -121,13 +121,6 @@ public class CuratorDruidCoordinatorTest extends CuratorTestBase
             EasyMock.anyObject()
         )
     ).andReturn(new AtomicReference(CoordinatorDynamicConfig.builder().build())).anyTimes();
-    EasyMock.expect(
-        configManager.watch(
-            EasyMock.eq(CoordinatorCompactionConfig.CONFIG_KEY),
-            EasyMock.anyObject(Class.class),
-            EasyMock.anyObject()
-        )
-    ).andReturn(new AtomicReference(CoordinatorCompactionConfig.empty())).anyTimes();
     EasyMock.replay(configManager);
 
     setupServerAndCurator();
@@ -165,7 +158,7 @@ public class CuratorDruidCoordinatorTest extends CuratorTestBase
         true,
         Execs.singleThreaded("coordinator_test_path_children_cache_dest-%d")
     );
-    sourceLoadQueuePeon = new CuratorLoadQueuePeon(
+    sourceLoadQueuePeon = new LoadQueuePeon(
         curator,
         SOURCE_LOAD_PATH,
         objectMapper,
@@ -173,7 +166,7 @@ public class CuratorDruidCoordinatorTest extends CuratorTestBase
         Execs.singleThreaded("coordinator_test_load_queue_peon_src-%d"),
         druidCoordinatorConfig
     );
-    destinationLoadQueuePeon = new CuratorLoadQueuePeon(
+    destinationLoadQueuePeon = new LoadQueuePeon(
         curator,
         DESTINATION_LOAD_PATH,
         objectMapper,

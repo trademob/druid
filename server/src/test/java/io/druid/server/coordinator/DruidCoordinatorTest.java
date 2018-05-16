@@ -25,6 +25,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.metamx.emitter.core.Event;
+import com.metamx.emitter.service.ServiceEmitter;
 import io.druid.client.DruidDataSource;
 import io.druid.client.DruidServer;
 import io.druid.client.ImmutableDruidDataSource;
@@ -38,8 +40,6 @@ import io.druid.jackson.DefaultObjectMapper;
 import io.druid.java.util.common.Intervals;
 import io.druid.java.util.common.concurrent.Execs;
 import io.druid.java.util.common.concurrent.ScheduledExecutorFactory;
-import io.druid.java.util.emitter.core.Event;
-import io.druid.java.util.emitter.service.ServiceEmitter;
 import io.druid.metadata.MetadataRuleManager;
 import io.druid.metadata.MetadataSegmentManager;
 import io.druid.server.DruidNode;
@@ -434,7 +434,7 @@ public class DruidCoordinatorTest extends CuratorTestBase
         new DataSegment(dataSource, Intervals.of("2017-01-01/P1D"), "v1", null, null, null, null, 0x9, 0)
     );
 
-    final LoadQueuePeon loadQueuePeonCold = new CuratorLoadQueuePeon(
+    final LoadQueuePeon loadQueuePeonCold = new LoadQueuePeon(
         curator,
         loadPathCold,
         objectMapper,
