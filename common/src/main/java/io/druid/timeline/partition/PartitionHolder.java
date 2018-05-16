@@ -97,10 +97,13 @@ public class PartitionHolder<T> implements Iterable<PartitionChunk<T>>
     Iterator<PartitionChunk<T>> iter = holderSet.iterator();
 
     PartitionChunk<T> curr = iter.next();
-    boolean endSeen = curr.isEnd();
 
     if (!curr.isStart()) {
       return false;
+    }
+
+    if (curr.isEnd()) {
+      return true;
     }
 
     while (iter.hasNext()) {
@@ -110,12 +113,12 @@ public class PartitionHolder<T> implements Iterable<PartitionChunk<T>>
       }
 
       if (next.isEnd()) {
-        endSeen = true;
+        return true;
       }
       curr = next;
     }
 
-    return endSeen;
+    return false;
   }
 
   public PartitionChunk<T> getChunk(final int partitionNum)
