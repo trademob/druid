@@ -41,10 +41,11 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.druid.data.input.impl.FloatDimensionSchema;
 import io.druid.data.input.impl.LongDimensionSchema;
 import io.druid.data.input.impl.StringDimensionSchema;
-import io.druid.indexer.TaskMetricsUtils;
 import io.druid.indexing.common.IngestionStatsAndErrorsTaskReportData;
 import io.druid.indexing.common.TaskReport;
 import io.druid.indexing.common.TaskReportFileWriter;
+import io.druid.indexing.common.stats.RowIngestionMeters;
+import io.druid.indexing.common.stats.RowIngestionMetersFactory;
 import io.druid.indexing.common.task.IndexTaskTest;
 import io.druid.client.cache.CacheConfig;
 import io.druid.client.cache.MapCache;
@@ -212,6 +213,7 @@ public class KafkaIndexTaskTest
   private final boolean isIncrementalHandoffSupported;
   private final Set<Integer> checkpointRequestsHash = Sets.newHashSet();
   private File reportsFile;
+  private RowIngestionMetersFactory rowIngestionMetersFactory;
 
   // This should be removed in versions greater that 0.12.x
   // isIncrementalHandoffSupported should always be set to true in those later versions
@@ -395,9 +397,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -449,9 +451,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -529,9 +531,9 @@ public class KafkaIndexTaskTest
     );
 
     // Check metrics
-    Assert.assertEquals(8, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(1, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(8, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(1, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2008/P1D", 0);
@@ -595,9 +597,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(2, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(2, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -649,9 +651,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(2, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(2, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2008/P1D", 0);
@@ -713,9 +715,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(1, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(4, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(1, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(4, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2009/P1D", 0);
@@ -761,9 +763,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     Assert.assertEquals(ImmutableSet.of(), publishedDescriptors());
@@ -802,9 +804,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -854,9 +856,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -909,9 +911,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.FAILED, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(1, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(1, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     Assert.assertEquals(ImmutableSet.of(), publishedDescriptors());
@@ -956,10 +958,10 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(null, status.getErrorMsg());
 
     // Check metrics
-    Assert.assertEquals(4, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processedWithErrors());
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(1, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(4, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessedWithError());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(1, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -975,18 +977,18 @@ public class KafkaIndexTaskTest
     IngestionStatsAndErrorsTaskReportData reportData = getTaskReportData();
 
     Map<String, Object> expectedMetrics = ImmutableMap.of(
-        "buildSegments",
+        RowIngestionMeters.BUILD_SEGMENTS,
         ImmutableMap.of(
-            TaskMetricsUtils.ROWS_PROCESSED, 4,
-            TaskMetricsUtils.ROWS_PROCESSED_WITH_ERRORS, 3,
-            TaskMetricsUtils.ROWS_UNPARSEABLE, 3,
-            TaskMetricsUtils.ROWS_THROWN_AWAY, 1
+            RowIngestionMeters.PROCESSED, 4,
+            RowIngestionMeters.PROCESSED_WITH_ERROR, 3,
+            RowIngestionMeters.UNPARSEABLE, 3,
+            RowIngestionMeters.THROWN_AWAY, 1
         )
     );
     Assert.assertEquals(expectedMetrics, reportData.getRowStats());
 
     Map<String, Object> unparseableEvents = ImmutableMap.of(
-        "buildSegments",
+        RowIngestionMeters.BUILD_SEGMENTS,
         Arrays.asList(
             "Found unparseable columns in row: [MapBasedInputRow{timestamp=2049-01-01T00:00:00.000Z, event={timestamp=2049, dim1=f, dim2=y, dimLong=10, dimFloat=20.0, met1=notanumber}, dimensions=[dim1, dim1t, dim2, dimLong, dimFloat]}], exceptions: [Unable to parse value[notanumber] for field[met1],]",
             "Found unparseable columns in row: [MapBasedInputRow{timestamp=2049-01-01T00:00:00.000Z, event={timestamp=2049, dim1=f, dim2=y, dimLong=10, dimFloat=notanumber, met1=1.0}, dimensions=[dim1, dim1t, dim2, dimLong, dimFloat]}], exceptions: [could not convert value [notanumber] to float,]",
@@ -1038,10 +1040,10 @@ public class KafkaIndexTaskTest
     IndexTaskTest.checkTaskStatusErrorMsgForParseExceptionsExceeded(status);
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().processedWithErrors());
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getProcessedWithError());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     Assert.assertEquals(ImmutableSet.of(), publishedDescriptors());
@@ -1050,18 +1052,18 @@ public class KafkaIndexTaskTest
     IngestionStatsAndErrorsTaskReportData reportData = getTaskReportData();
 
     Map<String, Object> expectedMetrics = ImmutableMap.of(
-        "buildSegments",
+        RowIngestionMeters.BUILD_SEGMENTS,
         ImmutableMap.of(
-            TaskMetricsUtils.ROWS_PROCESSED, 3,
-            TaskMetricsUtils.ROWS_PROCESSED_WITH_ERRORS, 0,
-            TaskMetricsUtils.ROWS_UNPARSEABLE, 3,
-            TaskMetricsUtils.ROWS_THROWN_AWAY, 0
+            RowIngestionMeters.PROCESSED, 3,
+            RowIngestionMeters.PROCESSED_WITH_ERROR, 0,
+            RowIngestionMeters.UNPARSEABLE, 3,
+            RowIngestionMeters.THROWN_AWAY, 0
         )
     );
     Assert.assertEquals(expectedMetrics, reportData.getRowStats());
 
     Map<String, Object> unparseableEvents = ImmutableMap.of(
-        "buildSegments",
+        RowIngestionMeters.BUILD_SEGMENTS,
         Arrays.asList(
             "Unable to parse row [unparseable2]",
             "Unable to parse row [unparseable]"
@@ -1118,12 +1120,12 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future2.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task1.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().thrownAway());
-    Assert.assertEquals(3, task2.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task2.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task2.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task1.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getThrownAway());
+    Assert.assertEquals(3, task2.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task2.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task2.getRowIngestionMeters().getThrownAway());
 
     // Check published segments & metadata
     SegmentDescriptor desc1 = SD(task1, "2010/P1D", 0);
@@ -1187,12 +1189,12 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.FAILED, future2.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task1.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().thrownAway());
-    Assert.assertEquals(3, task2.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(3, task2.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(1, task2.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task1.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getThrownAway());
+    Assert.assertEquals(3, task2.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(3, task2.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(1, task2.getRowIngestionMeters().getThrownAway());
 
     // Check published segments & metadata, should all be from the first task
     SegmentDescriptor desc1 = SD(task1, "2010/P1D", 0);
@@ -1262,12 +1264,12 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future2.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task1.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().thrownAway());
-    Assert.assertEquals(3, task2.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(3, task2.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(1, task2.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task1.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getThrownAway());
+    Assert.assertEquals(3, task2.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(3, task2.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(1, task2.getRowIngestionMeters().getThrownAway());
 
     // Check published segments & metadata
     SegmentDescriptor desc3 = SD(task2, "2011/P1D", 1);
@@ -1314,9 +1316,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(5, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(5, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published segments & metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -1394,12 +1396,12 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future2.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task1.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().thrownAway());
-    Assert.assertEquals(1, task2.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task2.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task2.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task1.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getThrownAway());
+    Assert.assertEquals(1, task2.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task2.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task2.getRowIngestionMeters().getThrownAway());
 
     // Check published segments & metadata
     SegmentDescriptor desc1 = SD(task1, "2010/P1D", 0);
@@ -1485,12 +1487,12 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future2.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(2, task1.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task1.getFireDepartmentMetrics().thrownAway());
-    Assert.assertEquals(1, task2.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task2.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task2.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(2, task1.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task1.getRowIngestionMeters().getThrownAway());
+    Assert.assertEquals(1, task2.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task2.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task2.getRowIngestionMeters().getThrownAway());
 
     // Check published segments & metadata
     SegmentDescriptor desc1 = SD(task1, "2010/P1D", 0);
@@ -1572,9 +1574,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(task.getEndOffsets(), task.getCurrentOffsets());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -1708,9 +1710,9 @@ public class KafkaIndexTaskTest
     Assert.assertEquals(TaskState.SUCCESS, future.get().getStatusCode());
 
     // Check metrics
-    Assert.assertEquals(3, task.getFireDepartmentMetrics().processed());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().unparseable());
-    Assert.assertEquals(0, task.getFireDepartmentMetrics().thrownAway());
+    Assert.assertEquals(3, task.getRowIngestionMeters().getProcessed());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getUnparseable());
+    Assert.assertEquals(0, task.getRowIngestionMeters().getThrownAway());
 
     // Check published metadata
     SegmentDescriptor desc1 = SD(task, "2010/P1D", 0);
@@ -1826,7 +1828,8 @@ public class KafkaIndexTaskTest
         ioConfig,
         context,
         null,
-        null
+        null,
+        rowIngestionMetersFactory
     );
     task.setPollRetryMs(POLL_RETRY_MS);
     return task;
@@ -1868,7 +1871,8 @@ public class KafkaIndexTaskTest
         ioConfig,
         context,
         null,
-        null
+        null,
+        rowIngestionMetersFactory
     );
     task.setPollRetryMs(POLL_RETRY_MS);
     return task;
@@ -1925,6 +1929,7 @@ public class KafkaIndexTaskTest
   {
     directory = tempFolder.newFolder();
     final TestUtils testUtils = new TestUtils();
+    rowIngestionMetersFactory = testUtils.getRowIngestionMetersFactory();
     final ObjectMapper objectMapper = testUtils.getTestObjectMapper();
     for (Module module : new KafkaIndexTaskModule().getJacksonModules()) {
       objectMapper.registerModule(module);

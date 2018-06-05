@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Optional;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -40,6 +39,7 @@ import io.druid.java.util.common.IOE;
 import io.druid.java.util.common.ISE;
 import io.druid.java.util.common.StringUtils;
 import io.druid.java.util.common.concurrent.Execs;
+import io.druid.java.util.common.jackson.JacksonUtils;
 import io.druid.java.util.emitter.EmittingLogger;
 import io.druid.java.util.http.client.HttpClient;
 import io.druid.java.util.http.client.Request;
@@ -57,6 +57,8 @@ import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -210,8 +212,10 @@ public class KafkaIndexTaskClient
       return ImmutableMap.of();
     }
     catch (IOException | InterruptedException e) {
-      log.error("Exception [%s] while pausing Task [%s]", e.getMessage(), id);
-      throw Throwables.propagate(e);
+      throw new RuntimeException(
+          StringUtils.format("Exception [%s] while pausing Task [%s]", e.getMessage(), id),
+          e
+      );
     }
   }
 
@@ -227,7 +231,7 @@ public class KafkaIndexTaskClient
       return KafkaIndexTask.Status.NOT_STARTED;
     }
     catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -245,8 +249,46 @@ public class KafkaIndexTaskClient
       return null;
     }
     catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
+  }
+
+  public Map<String, Object> getMovingAverages(final String id)
+  {
+    log.debug("GetMovingAverages task[%s]", id);
+
+    try {
+      final FullResponseHolder response = submitRequest(
+          id,
+          HttpMethod.GET,
+          "rowStats",
+          null,
+          true
+      );
+      return response.getContent() == null || response.getContent().isEmpty()
+             ? Collections.emptyMap()
+             : jsonMapper.readValue(response.getContent(), JacksonUtils.TYPE_REFERENCE_MAP_STRING_OBJECT);
+    }
+    catch (NoTaskLocationException e) {
+      return Collections.emptyMap();
+    }
+    catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public ListenableFuture<Map<String, Object>> getMovingAveragesAsync(final String id)
+  {
+    return executorService.submit(
+        new Callable<Map<String, Object>>()
+        {
+          @Override
+          public Map<String, Object> call()
+          {
+            return getMovingAverages(id);
+          }
+        }
+    );
   }
 
   public Map<Integer, Long> getCurrentOffsets(final String id, final boolean retry)
@@ -263,7 +305,7 @@ public class KafkaIndexTaskClient
       return ImmutableMap.of();
     }
     catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -280,7 +322,7 @@ public class KafkaIndexTaskClient
       return EMPTY_TREE_MAP;
     }
     catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -308,7 +350,7 @@ public class KafkaIndexTaskClient
       return ImmutableMap.of();
     }
     catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -335,7 +377,7 @@ public class KafkaIndexTaskClient
       return false;
     }
     catch (IOException e) {
-      throw Throwables.propagate(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -540,12 +582,18 @@ public class KafkaIndexTaskClient
           }
 
           log.debug("HTTP %s: %s", method.getName(), serviceUri.toString());
-          response = httpClient.go(request, new FullResponseHandler(Charsets.UTF_8), httpTimeout).get();
+          response = httpClient.go(request, new FullResponseHandler(StandardCharsets.UTF_8), httpTimeout).get();
+
+        }
+        catch (IOException | ChannelException ioce) {
+          throw ioce;
+        }
+        catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(ie);
         }
         catch (Exception e) {
-          Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
-          Throwables.propagateIfInstanceOf(e.getCause(), ChannelException.class);
-          throw Throwables.propagate(e);
+          throw new RuntimeException(e);
         }
 
         int responseCode = response.getStatus().getCode();
@@ -594,10 +642,10 @@ public class KafkaIndexTaskClient
           // if retry=false, we probably aren't too concerned if the operation doesn't succeed (i.e. the request was
           // for informational purposes only) so don't log a scary stack trace
           log.info("submitRequest failed for [%s], with message [%s]", urlForLog, e.getMessage());
-          Throwables.propagate(e);
+          throw new RuntimeException(e);
         } else if (delay == null) {
           log.warn(e, "Retries exhausted for [%s], last exception:", urlForLog);
-          Throwables.propagate(e);
+          throw new RuntimeException(e);
         } else {
           try {
             final long sleepTime = delay.getMillis();
@@ -611,7 +659,9 @@ public class KafkaIndexTaskClient
             Thread.sleep(sleepTime);
           }
           catch (InterruptedException e2) {
-            Throwables.propagate(e2);
+            Thread.currentThread().interrupt();
+            e.addSuppressed(e2);
+            throw new RuntimeException(e);
           }
         }
       }
