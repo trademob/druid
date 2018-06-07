@@ -250,7 +250,7 @@ public class SimpleDictionaryEncodedColumn implements DictionaryEncodedColumn<St
               return BooleanValueMatcher.of(false);
             }
           } else {
-            // Employ precomputed BitSet optimization
+            // Employ caching BitSet optimization
             return makeValueMatcher(Predicates.equalTo(value));
           }
         }
