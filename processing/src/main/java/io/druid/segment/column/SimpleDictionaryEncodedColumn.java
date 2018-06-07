@@ -237,7 +237,7 @@ public class SimpleDictionaryEncodedColumn
               return BooleanValueMatcher.of(false);
             }
           } else {
-            // Employ precomputed BitSet optimization
+            // Employ caching BitSet optimization
             return makeValueMatcher(Predicates.equalTo(value));
           }
         }
