@@ -20,7 +20,6 @@
 package io.druid.server.coordinator;
 
 import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -30,8 +29,6 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.inject.Inject;
-import io.druid.java.util.emitter.EmittingLogger;
-import io.druid.java.util.emitter.service.ServiceEmitter;
 import io.druid.client.DruidDataSource;
 import io.druid.client.DruidServer;
 import io.druid.client.ImmutableDruidDataSource;
@@ -56,6 +53,8 @@ import io.druid.java.util.common.guava.Comparators;
 import io.druid.java.util.common.guava.FunctionalIterable;
 import io.druid.java.util.common.lifecycle.LifecycleStart;
 import io.druid.java.util.common.lifecycle.LifecycleStop;
+import io.druid.java.util.emitter.EmittingLogger;
+import io.druid.java.util.emitter.service.ServiceEmitter;
 import io.druid.metadata.MetadataRuleManager;
 import io.druid.metadata.MetadataSegmentManager;
 import io.druid.server.DruidNode;
@@ -65,6 +64,7 @@ import io.druid.server.coordinator.helper.DruidCoordinatorCleanupUnneeded;
 import io.druid.server.coordinator.helper.DruidCoordinatorHelper;
 import io.druid.server.coordinator.helper.DruidCoordinatorLogger;
 import io.druid.server.coordinator.helper.DruidCoordinatorRuleRunner;
+import io.druid.server.coordinator.helper.DruidCoordinatorSegmentCompactor;
 import io.druid.server.coordinator.helper.DruidCoordinatorSegmentInfoLoader;
 import io.druid.server.coordinator.rules.LoadRule;
 import io.druid.server.coordinator.rules.Rule;
@@ -97,14 +97,8 @@ public class DruidCoordinator
 {
   public static Comparator<DataSegment> SEGMENT_COMPARATOR = Ordering.from(Comparators.intervalsByEndThenStart())
                                                                      .onResultOf(
-                                                                         new Function<DataSegment, Interval>()
-                                                                         {
-                                                                           @Override
-                                                                           public Interval apply(DataSegment segment)
-                                                                           {
-                                                                             return segment.getInterval();
-                                                                           }
-                                                                         })
+                                                                         (Function<DataSegment, Interval>) segment -> segment
+                                                                             .getInterval())
                                                                      .compound(Ordering.<DataSegment>natural())
                                                                      .reverse();
 
@@ -130,6 +124,8 @@ public class DruidCoordinator
   private final BalancerStrategyFactory factory;
   private final LookupCoordinatorManager lookupCoordinatorManager;
   private final DruidLeaderSelector coordLeaderSelector;
+
+  private final DruidCoordinatorSegmentCompactor segmentCompactor;
 
   @Inject
   public DruidCoordinator(
@@ -216,6 +212,8 @@ public class DruidCoordinator
     this.factory = factory;
     this.lookupCoordinatorManager = lookupCoordinatorManager;
     this.coordLeaderSelector = coordLeaderSelector;
+
+    this.segmentCompactor = new DruidCoordinatorSegmentCompactor(indexingServiceClient);
   }
 
   public boolean isLeader()
@@ -317,12 +315,26 @@ public class DruidCoordinator
     return loadStatus;
   }
 
+  public long remainingSegmentSizeBytesForCompaction(String dataSource)
+  {
+    return segmentCompactor.getRemainingSegmentSizeBytes(dataSource);
+  }
+
   public CoordinatorDynamicConfig getDynamicConfigs()
   {
     return configManager.watch(
         CoordinatorDynamicConfig.CONFIG_KEY,
         CoordinatorDynamicConfig.class,
-        new CoordinatorDynamicConfig.Builder().build()
+        CoordinatorDynamicConfig.builder().build()
+    ).get();
+  }
+
+  public CoordinatorCompactionConfig getCompactionConfig()
+  {
+    return configManager.watch(
+        CoordinatorCompactionConfig.CONFIG_KEY,
+        CoordinatorCompactionConfig.class,
+        CoordinatorCompactionConfig.empty()
     ).get();
   }
 
@@ -558,7 +570,8 @@ public class DruidCoordinator
                 if (coordLeaderSelector.isLeader() && startingLeaderCounter == coordLeaderSelector.localTerm()) {
                   theRunnable.run();
                 }
-                if (coordLeaderSelector.isLeader() && startingLeaderCounter == coordLeaderSelector.localTerm()) { // (We might no longer be leader)
+                if (coordLeaderSelector.isLeader()
+                    && startingLeaderCounter == coordLeaderSelector.localTerm()) { // (We might no longer be leader)
                   return ScheduledExecutors.Signal.REPEAT;
                 } else {
                   return ScheduledExecutors.Signal.STOP;
@@ -595,9 +608,13 @@ public class DruidCoordinator
   {
     List<DruidCoordinatorHelper> helpers = Lists.newArrayList();
     helpers.add(new DruidCoordinatorSegmentInfoLoader(DruidCoordinator.this));
+    helpers.add(segmentCompactor);
     helpers.addAll(indexingServiceHelpers);
 
-    log.info("Done making indexing service helpers [%s]", helpers);
+    log.info(
+        "Done making indexing service helpers [%s]",
+        helpers.stream().map(helper -> helper.getClass().getCanonicalName()).collect(Collectors.toList())
+    );
     return ImmutableList.copyOf(helpers);
   }
 
@@ -646,13 +663,14 @@ public class DruidCoordinator
 
         // Do coordinator stuff.
         DruidCoordinatorRuntimeParams params =
-                DruidCoordinatorRuntimeParams.newBuilder()
-                        .withStartTime(startTime)
-                        .withDatasources(metadataSegmentManager.getInventory())
-                        .withDynamicConfigs(getDynamicConfigs())
-                        .withEmitter(emitter)
-                        .withBalancerStrategy(balancerStrategy)
-                        .build();
+            DruidCoordinatorRuntimeParams.newBuilder()
+                                         .withStartTime(startTime)
+                                         .withDataSources(metadataSegmentManager.getInventory())
+                                         .withDynamicConfigs(getDynamicConfigs())
+                                         .withCompactionConfig(getCompactionConfig())
+                                         .withEmitter(emitter)
+                                         .withBalancerStrategy(balancerStrategy)
+                                         .build();
         for (DruidCoordinatorHelper helper : helpers) {
           // Don't read state and run state in the same helper otherwise racy conditions may exist
           if (coordLeaderSelector.isLeader() && startingLeaderCounter == coordLeaderSelector.localTerm()) {
@@ -686,27 +704,8 @@ public class DruidCoordinator
                   // Display info about all historical servers
                   Iterable<ImmutableDruidServer> servers = FunctionalIterable
                       .create(serverInventoryView.getInventory())
-                      .filter(
-                          new Predicate<DruidServer>()
-                          {
-                            @Override
-                            public boolean apply(
-                                DruidServer input
-                            )
-                            {
-                              return input.segmentReplicatable();
-                            }
-                          }
-                      ).transform(
-                          new Function<DruidServer, ImmutableDruidServer>()
-                          {
-                            @Override
-                            public ImmutableDruidServer apply(DruidServer input)
-                            {
-                              return input.toImmutableDruidServer();
-                            }
-                          }
-                      );
+                      .filter(DruidServer::segmentReplicatable)
+                      .transform(DruidServer::toImmutableDruidServer);
 
                   if (log.isDebugEnabled()) {
                     log.debug("Servers");

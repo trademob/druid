@@ -323,5 +323,7 @@ Kafka Indexing Service may still produce some small segments. Lets say the task 
 is set to an HOUR and Supervisor was started at 9:10 then after 4 hours at 13:10, new set of tasks will be started and
 events for the interval 13:00 - 14:00 may be split across previous and new set of tasks. If you see it becoming a problem then
 one can schedule re-indexing tasks be run to merge segments together into new segments of an ideal size (in the range of ~500-700 MB per segment).
-There is also ongoing work to support automatic segment compaction of sharded segments as well as compaction not requiring
-Hadoop (see [here](https://github.com/druid-io/druid/pull/5102)).
+Details on how to optimize the segment size can be found on [Segment size optimization](../../operations/segment-optimization.html).
+ 
+Note that the Merge Task and Append Task described [here](../../ingestion/tasks.html) will not work as they require
+unsharded segments while Kafka indexing tasks always generated sharded segments.

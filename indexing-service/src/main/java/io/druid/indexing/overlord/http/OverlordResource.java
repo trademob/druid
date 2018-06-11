@@ -28,12 +28,14 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.ByteSource;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.inject.Inject;
 import com.sun.jersey.spi.container.ResourceFilters;
 import io.druid.audit.AuditEntry;
 import io.druid.audit.AuditInfo;
 import io.druid.audit.AuditManager;
+import io.druid.common.config.ConfigManager.SetResult;
 import io.druid.common.config.JacksonConfigManager;
 import io.druid.indexer.TaskLocation;
 import io.druid.indexer.TaskStatusPlus;
@@ -88,6 +90,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -251,6 +254,29 @@ public class OverlordResource
     );
   }
 
+  @POST
+  @Path("/taskStatus")
+  @Produces(MediaType.APPLICATION_JSON)
+  @ResourceFilters(StateResourceFilter.class)
+  public Response getMultipleTaskStatuses(
+      Set<String> taskIds
+  )
+  {
+    if (taskIds == null || taskIds.size() == 0) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("No TaskIds provided.").build();
+    }
+
+    Map<String, TaskStatus> result = new HashMap<>(taskIds.size());
+    for (String taskId : taskIds) {
+      Optional<TaskStatus> optional = taskStorageQueryAdapter.getStatus(taskId);
+      if (optional.isPresent()) {
+        result.put(taskId, optional.get());
+      }
+    }
+
+    return Response.ok().entity(result).build();
+  }
+
   @GET
   @Path("/worker")
   @Produces(MediaType.APPLICATION_JSON)
@@ -276,17 +302,18 @@ public class OverlordResource
       @Context final HttpServletRequest req
   )
   {
-    if (!configManager.set(
+    final SetResult setResult = configManager.set(
         WorkerBehaviorConfig.CONFIG_KEY,
         workerBehaviorConfig,
         new AuditInfo(author, comment, req.getRemoteAddr())
-    )) {
+    );
+    if (setResult.isOk()) {
+      log.info("Updating Worker configs: %s", workerBehaviorConfig);
+
+      return Response.ok().build();
+    } else {
       return Response.status(Response.Status.BAD_REQUEST).build();
     }
-
-    log.info("Updating Worker configs: %s", workerBehaviorConfig);
-
-    return Response.ok().build();
   }
 
   @GET
@@ -407,11 +434,10 @@ public class OverlordResource
               if (!runnersKnownTasks.contains(task.getId())) {
                 waitingTasks.add(
                     // Would be nice to include the real created date, but the TaskStorage API doesn't yet allow it.
-                    new TaskRunnerWorkItem(
+                    new WaitingTask(
                         task.getId(),
-                        SettableFuture.create(),
-                        DateTimes.EPOCH,
-                        DateTimes.EPOCH
+                        task.getType(),
+                        SettableFuture.create()
                     )
                     {
                       @Override
@@ -427,6 +453,33 @@ public class OverlordResource
           }
         }
     );
+  }
+
+  private static class WaitingTask extends TaskRunnerWorkItem
+  {
+    private final String taskType;
+
+    WaitingTask(
+        String taskId,
+        String taskType,
+        ListenableFuture<TaskStatus> result
+    )
+    {
+      super(taskId, result, DateTimes.EPOCH, DateTimes.EPOCH);
+      this.taskType = taskType;
+    }
+
+    @Override
+    public TaskLocation getLocation()
+    {
+      return TaskLocation.unknown();
+    }
+
+    @Override
+    public String getTaskType()
+    {
+      return taskType;
+    }
   }
 
   @GET
@@ -449,7 +502,10 @@ public class OverlordResource
   @GET
   @Path("/runningTasks")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getRunningTasks(@Context final HttpServletRequest req)
+  public Response getRunningTasks(
+      @QueryParam("type") String taskType,
+      @Context final HttpServletRequest req
+  )
   {
     return workItemsResponse(
         new Function<TaskRunner, Collection<? extends TaskRunnerWorkItem>>()
@@ -457,7 +513,20 @@ public class OverlordResource
           @Override
           public Collection<? extends TaskRunnerWorkItem> apply(TaskRunner taskRunner)
           {
-            return securedTaskRunnerWorkItem(taskRunner.getRunningTasks(), req);
+            final Collection<? extends TaskRunnerWorkItem> workItems;
+            if (taskType == null) {
+              workItems = taskRunner.getRunningTasks();
+            } else {
+              workItems = taskRunner.getRunningTasks()
+                                    .stream()
+                                    .filter(workitem -> {
+                                      final String itemType = workitem.getTaskType();
+                                      return itemType != null && itemType.equals(taskType);
+                                    })
+                                    .collect(Collectors.toList());
+            }
+
+            return securedTaskRunnerWorkItem(workItems, req);
           }
         }
     );
@@ -471,8 +540,7 @@ public class OverlordResource
       @Context final HttpServletRequest req
   )
   {
-    Function<TaskStatus, Iterable<ResourceAction>> raGenerator = taskStatus -> {
-      final String taskId = taskStatus.getId();
+    final Function<String, Task> taskFunction = taskId -> {
       final Optional<Task> optionalTask = taskStorageQueryAdapter.getTask(taskId);
       if (!optionalTask.isPresent()) {
         throw new WebApplicationException(
@@ -481,10 +549,15 @@ public class OverlordResource
             ).build()
         );
       }
+      return optionalTask.get();
+    };
+
+    Function<TaskStatus, Iterable<ResourceAction>> raGenerator = taskStatus -> {
+      final Task task = taskFunction.apply(taskStatus.getId());
 
       return Lists.newArrayList(
           new ResourceAction(
-              new Resource(optionalTask.get().getDataSource(), ResourceType.DATASOURCE),
+              new Resource(task.getDataSource(), ResourceType.DATASOURCE),
               Action.READ
           )
       );
@@ -503,6 +576,7 @@ public class OverlordResource
         .stream()
         .map(status -> new TaskStatusPlus(
             status.getId(),
+            taskFunction.apply(status.getId()).getType(),
             taskStorageQueryAdapter.getCreatedTime(status.getId()),
             // Would be nice to include the real queue insertion time, but the TaskStorage API doesn't yet allow it.
             DateTimes.EPOCH,
@@ -639,6 +713,7 @@ public class OverlordResource
                       {
                         return new TaskStatusPlus(
                             workItem.getTaskId(),
+                            workItem.getTaskType(),
                             workItem.getCreatedTime(),
                             workItem.getQueueInsertionTime(),
                             null,
