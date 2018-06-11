@@ -30,6 +30,7 @@ import java.util.Objects;
 public class TaskStatusPlus
 {
   private final String id;
+  private final String type;
   private final DateTime createdTime;
   private final DateTime queueInsertionTime;
   private final TaskState state;
@@ -39,6 +40,7 @@ public class TaskStatusPlus
   @JsonCreator
   public TaskStatusPlus(
       @JsonProperty("id") String id,
+      @JsonProperty("type") String type,
       @JsonProperty("createdTime") DateTime createdTime,
       @JsonProperty("queueInsertionTime") DateTime queueInsertionTime,
       @JsonProperty("statusCode") @Nullable TaskState state,
@@ -50,6 +52,7 @@ public class TaskStatusPlus
       Preconditions.checkNotNull(duration, "duration");
     }
     this.id = Preconditions.checkNotNull(id, "id");
+    this.type = Preconditions.checkNotNull(type, "type");
     this.createdTime = Preconditions.checkNotNull(createdTime, "createdTime");
     this.queueInsertionTime = Preconditions.checkNotNull(queueInsertionTime, "queueInsertionTime");
     this.state = state;
@@ -61,6 +64,12 @@ public class TaskStatusPlus
   public String getId()
   {
     return id;
+  }
+
+  @JsonProperty
+  public String getType()
+  {
+    return type;
   }
 
   @JsonProperty

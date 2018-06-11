@@ -47,6 +47,7 @@ public class TaskStatusPlusTest
     );
     final TaskStatusPlus status = new TaskStatusPlus(
         "testId",
+        "testType",
         DateTimes.nowUtc(),
         DateTimes.nowUtc(),
         TaskState.RUNNING,
