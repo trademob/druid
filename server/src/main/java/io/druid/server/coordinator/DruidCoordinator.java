@@ -125,6 +125,8 @@ public class DruidCoordinator
   private final LookupCoordinatorManager lookupCoordinatorManager;
   private final DruidLeaderSelector coordLeaderSelector;
 
+  private final DruidCoordinatorSegmentCompactor segmentCompactor;
+
   @Inject
   public DruidCoordinator(
       DruidCoordinatorConfig config,
@@ -210,6 +212,8 @@ public class DruidCoordinator
     this.factory = factory;
     this.lookupCoordinatorManager = lookupCoordinatorManager;
     this.coordLeaderSelector = coordLeaderSelector;
+
+    this.segmentCompactor = new DruidCoordinatorSegmentCompactor(indexingServiceClient);
   }
 
   public boolean isLeader()
@@ -311,12 +315,26 @@ public class DruidCoordinator
     return loadStatus;
   }
 
+  public long remainingSegmentSizeBytesForCompaction(String dataSource)
+  {
+    return segmentCompactor.getRemainingSegmentSizeBytes(dataSource);
+  }
+
   public CoordinatorDynamicConfig getDynamicConfigs()
   {
     return configManager.watch(
         CoordinatorDynamicConfig.CONFIG_KEY,
         CoordinatorDynamicConfig.class,
         CoordinatorDynamicConfig.builder().build()
+    ).get();
+  }
+
+  public CoordinatorCompactionConfig getCompactionConfig()
+  {
+    return configManager.watch(
+        CoordinatorCompactionConfig.CONFIG_KEY,
+        CoordinatorCompactionConfig.class,
+        CoordinatorCompactionConfig.empty()
     ).get();
   }
 
@@ -590,7 +608,7 @@ public class DruidCoordinator
   {
     List<DruidCoordinatorHelper> helpers = Lists.newArrayList();
     helpers.add(new DruidCoordinatorSegmentInfoLoader(DruidCoordinator.this));
-    helpers.add(new DruidCoordinatorSegmentCompactor(indexingServiceClient));
+    helpers.add(segmentCompactor);
     helpers.addAll(indexingServiceHelpers);
 
     log.info(
@@ -645,13 +663,14 @@ public class DruidCoordinator
 
         // Do coordinator stuff.
         DruidCoordinatorRuntimeParams params =
-                DruidCoordinatorRuntimeParams.newBuilder()
-                        .withStartTime(startTime)
-                        .withDataSources(metadataSegmentManager.getInventory())
-                        .withDynamicConfigs(getDynamicConfigs())
-                        .withEmitter(emitter)
-                        .withBalancerStrategy(balancerStrategy)
-                        .build();
+            DruidCoordinatorRuntimeParams.newBuilder()
+                                         .withStartTime(startTime)
+                                         .withDataSources(metadataSegmentManager.getInventory())
+                                         .withDynamicConfigs(getDynamicConfigs())
+                                         .withCompactionConfig(getCompactionConfig())
+                                         .withEmitter(emitter)
+                                         .withBalancerStrategy(balancerStrategy)
+                                         .build();
         for (DruidCoordinatorHelper helper : helpers) {
           // Don't read state and run state in the same helper otherwise racy conditions may exist
           if (coordLeaderSelector.isLeader() && startingLeaderCounter == coordLeaderSelector.localTerm()) {

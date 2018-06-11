@@ -38,7 +38,6 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.inject.Inject;
 import io.druid.audit.AuditInfo;
 import io.druid.common.config.JacksonConfigManager;
-import io.druid.java.util.common.concurrent.Execs;
 import io.druid.concurrent.LifecycleLock;
 import io.druid.discovery.DruidNodeDiscoveryProvider;
 import io.druid.guice.annotations.EscalatedGlobal;
@@ -48,6 +47,7 @@ import io.druid.java.util.common.IOE;
 import io.druid.java.util.common.ISE;
 import io.druid.java.util.common.StreamUtils;
 import io.druid.java.util.common.StringUtils;
+import io.druid.java.util.common.concurrent.Execs;
 import io.druid.java.util.emitter.EmittingLogger;
 import io.druid.java.util.http.client.HttpClient;
 import io.druid.java.util.http.client.Request;
@@ -242,7 +242,7 @@ public class LookupCoordinatorManager
           }
         }
       }
-      return configManager.set(LOOKUP_CONFIG_KEY, updatedSpec, auditInfo);
+      return configManager.set(LOOKUP_CONFIG_KEY, updatedSpec, auditInfo).isOk();
     }
   }
 
@@ -277,7 +277,7 @@ public class LookupCoordinatorManager
       final Map<String, LookupExtractorFactoryMapContainer> updateTierSpec = new HashMap<>(priorTierSpec);
       updateTierSpec.remove(lookup);
       updateSpec.put(tier, updateTierSpec);
-      return configManager.set(LOOKUP_CONFIG_KEY, updateSpec, auditInfo);
+      return configManager.set(LOOKUP_CONFIG_KEY, updateSpec, auditInfo).isOk();
     }
   }
 
