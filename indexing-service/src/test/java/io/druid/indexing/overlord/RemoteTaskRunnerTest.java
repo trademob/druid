@@ -32,7 +32,7 @@ import io.druid.java.util.emitter.EmittingLogger;
 import io.druid.java.util.emitter.service.ServiceEmitter;
 import io.druid.indexer.TaskState;
 import io.druid.indexing.common.IndexingServiceCondition;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.TestRealtimeTask;
 import io.druid.indexing.common.TestTasks;
 import io.druid.indexing.common.TestUtils;
