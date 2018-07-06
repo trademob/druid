@@ -231,8 +231,7 @@ public class TopNQueryQueryToolChestTest
             Arrays.asList(
                 ImmutableMap.<String, Object>of(
                     "test", dimValue,
-                    "metric1", 2,
-                    "post", 10
+                    "metric1", 2
                 )
             )
         )
