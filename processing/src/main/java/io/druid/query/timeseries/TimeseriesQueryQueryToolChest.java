@@ -29,6 +29,7 @@ import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
 import io.druid.java.util.common.granularity.Granularity;
 import io.druid.java.util.common.guava.Sequence;
+import io.druid.java.util.common.guava.Sequences;
 import io.druid.java.util.common.guava.nary.BinaryFn;
 import io.druid.query.CacheStrategy;
 import io.druid.query.IntervalChunkingQueryRunnerDecorator;
@@ -97,12 +98,17 @@ public class TimeseriesQueryQueryToolChest extends QueryToolChest<Result<Timeser
           Map<String, Object> context
       )
       {
-        return super.doRun(
+        int limit = ((TimeseriesQuery) queryPlus.getQuery()).getLimit();
+        Sequence<Result<TimeseriesResultValue>> result = super.doRun(
             baseRunner,
             // Don't do post aggs until makePostComputeManipulatorFn() is called
             queryPlus.withQuery(((TimeseriesQuery) queryPlus.getQuery()).withPostAggregatorSpecs(ImmutableList.of())),
             context
         );
+        if (limit < Integer.MAX_VALUE) {
+          return Sequences.limit(result, limit);
+        }
+        return result;
       }
 
       @Override
@@ -164,6 +170,7 @@ public class TimeseriesQueryQueryToolChest extends QueryToolChest<Result<Timeser
             .appendCacheable(query.getDimensionsFilter())
             .appendCacheables(query.getAggregatorSpecs())
             .appendCacheable(query.getVirtualColumns())
+            .appendInt(query.getLimit())
             .build();
       }
 
