@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.NavigableSet;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  */
@@ -124,28 +123,22 @@ public class DruidCoordinatorBalancer implements DruidCoordinatorHelper
 
     final int maxToLoad = params.getCoordinatorDynamicConfig().getMaxSegmentsInNodeLoadingQueue();
     long unmoved = 0L;
-    for (int moved = 0; (moved + unmoved) < maxSegmentsToMove;) {
+    for (int iter = 0; iter < maxSegmentsToMove; iter++) {
+      if (maxToLoad > 0) {
+        toMoveTo.removeIf(s -> s.getNumberOfSegmentsInQueue() >= maxToLoad);
+      }
       final BalancerSegmentHolder segmentToMove = strategy.pickSegmentToMove(toMoveFrom);
 
       if (segmentToMove != null && params.getAvailableSegments().contains(segmentToMove.getSegment())) {
-        final List<ServerHolder> toMoveToWithLoadQueueCapacity =
-            toMoveTo.stream()
-                    .filter(s -> maxToLoad <= 0 || s.getNumberOfSegmentsInQueue() < maxToLoad)
-                    .collect(Collectors.toList());
-
-        final ServerHolder destinationHolder =
-            strategy.findNewSegmentHomeBalancer(segmentToMove.getSegment(), toMoveToWithLoadQueueCapacity);
+        final ServerHolder destinationHolder = strategy.findNewSegmentHomeBalancer(segmentToMove.getSegment(), toMoveTo);
 
         if (destinationHolder != null) {
           moveSegment(segmentToMove, destinationHolder.getServer(), params);
-          moved++;
         } else {
-          log.info("Segment [%s] is 'optimally' placed.", segmentToMove.getSegment().getIdentifier());
-          unmoved++;
+          ++unmoved;
         }
       }
     }
-
     if (unmoved == maxSegmentsToMove) {
       // Cluster should be alive and constantly adjusting
       log.info("No good moves found in tier [%s]", tier);
