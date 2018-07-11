@@ -21,6 +21,7 @@ package io.druid.query.timeseries;
 
 import com.google.common.base.Function;
 import io.druid.java.util.common.guava.Sequence;
+import io.druid.java.util.common.guava.Sequences;
 import io.druid.query.QueryRunnerHelper;
 import io.druid.query.Result;
 import io.druid.query.aggregation.Aggregator;
@@ -46,7 +47,16 @@ public class TimeseriesQueryEngine
     }
 
     final Filter filter = Filters.convertToCNFFromQueryContext(query, Filters.toFilter(query.getDimensionsFilter()));
+    final int limit = query.getLimit();
+    Sequence<Result<TimeseriesResultValue>> result = generateTimeseriesResult(adapter, query, filter);
+    if (limit < Integer.MAX_VALUE) {
+      return Sequences.limit(result, limit);
+    }
+    return result;
+  }
 
+  private Sequence<Result<TimeseriesResultValue>> generateTimeseriesResult(StorageAdapter adapter, TimeseriesQuery query, Filter filter)
+  {
     return QueryRunnerHelper.makeCursorBasedQuery(
         adapter,
         query.getQuerySegmentSpec().getIntervals(),
@@ -81,7 +91,6 @@ public class TimeseriesQueryEngine
                 }
                 cursor.advance();
               }
-
               TimeseriesResultBuilder bob = new TimeseriesResultBuilder(cursor.getTime());
 
               for (int i = 0; i < aggregatorSpecs.size(); i++) {

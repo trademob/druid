@@ -54,7 +54,7 @@ import io.druid.concurrent.LifecycleLock;
 import io.druid.curator.CuratorUtils;
 import io.druid.curator.cache.PathChildrenCacheFactory;
 import io.druid.indexer.TaskLocation;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.task.Task;
 import io.druid.indexing.overlord.autoscaling.ProvisioningService;
 import io.druid.indexing.overlord.autoscaling.ProvisioningStrategy;
@@ -628,7 +628,8 @@ public class RemoteTaskRunner implements WorkerTaskRunner, TaskLogStreamer
         task.getId(),
         task.getType(),
         null,
-        null
+        null,
+        task.getDataSource()
     );
     pendingTaskPayloads.put(task.getId(), task);
     pendingTasks.put(task.getId(), taskRunnerWorkItem);
@@ -966,7 +967,8 @@ public class RemoteTaskRunner implements WorkerTaskRunner, TaskLogStreamer
                             taskId,
                             announcement.getTaskType(),
                             zkWorker.getWorker(),
-                            TaskLocation.unknown()
+                            TaskLocation.unknown(),
+                            announcement.getTaskDataSource()
                         );
                         final RemoteTaskRunnerWorkItem existingItem = runningTasks.putIfAbsent(
                             taskId,

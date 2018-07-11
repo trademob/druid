@@ -29,7 +29,7 @@ import io.druid.java.util.emitter.service.ServiceEmitter;
 import io.druid.java.util.emitter.service.ServiceEventBuilder;
 import io.druid.common.guava.DSuppliers;
 import io.druid.indexer.TaskLocation;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.TestTasks;
 import io.druid.indexing.common.task.NoopTask;
 import io.druid.indexing.common.task.Task;
@@ -125,7 +125,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     );
@@ -163,7 +163,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     ).times(2);
@@ -222,7 +222,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     ).times(2);
@@ -275,7 +275,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     ).times(2);
@@ -316,7 +316,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     ).times(2);
@@ -364,7 +364,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     ).times(2);
@@ -468,7 +468,7 @@ public class SimpleProvisioningStrategyTest
     RemoteTaskRunner runner = EasyMock.createMock(RemoteTaskRunner.class);
     EasyMock.expect(runner.getPendingTasks()).andReturn(
         Collections.singletonList(
-            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null)
+            new RemoteTaskRunnerWorkItem(testTask.getId(), testTask.getType(), null, null, testTask.getDataSource())
                 .withQueueInsertionTime(DateTimes.nowUtc())
         )
     ).times(2);

@@ -17,56 +17,68 @@
  * under the License.
  */
 
-package io.druid.testing.clients;
+package io.druid.indexing.overlord.http;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.druid.indexer.TaskStatus;
-import org.joda.time.DateTime;
 
-public class TaskResponseObject
+import java.util.Objects;
+
+public class TaskStatusResponse
 {
-
-  private final String id;
-  private final DateTime createdTime;
-  private final DateTime queueInsertionTime;
+  private final String task; // Task ID, named "task" in the JSONification of this class.
   private final TaskStatus status;
 
   @JsonCreator
-  private TaskResponseObject(
-      @JsonProperty("id") String id,
-      @JsonProperty("createdTime") DateTime createdTime,
-      @JsonProperty("queueInsertionTime") DateTime queueInsertionTime,
-      @JsonProperty("status") TaskStatus status
+  public TaskStatusResponse(
+      @JsonProperty("task") final String task,
+      @JsonProperty("status") final TaskStatus status
   )
   {
-    this.id = id;
-    this.createdTime = createdTime;
-    this.queueInsertionTime = queueInsertionTime;
+    this.task = task;
     this.status = status;
   }
 
-  @SuppressWarnings("unused") // Used by Jackson serialization?
-  public String getId()
+  @JsonProperty
+  public String getTask()
   {
-    return id;
+    return task;
   }
 
-  @SuppressWarnings("unused") // Used by Jackson serialization?
-  public DateTime getCreatedTime()
-  {
-    return createdTime;
-  }
-
-  @SuppressWarnings("unused") // Used by Jackson serialization?
-  public DateTime getQueueInsertionTime()
-  {
-    return queueInsertionTime;
-  }
-
-  @SuppressWarnings("unused") // Used by Jackson serialization?
+  @JsonProperty
   public TaskStatus getStatus()
   {
     return status;
+  }
+
+  @Override
+  public boolean equals(final Object o)
+  {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final TaskStatusResponse that = (TaskStatusResponse) o;
+    return Objects.equals(task, that.task) &&
+           Objects.equals(status, that.status);
+  }
+
+  @Override
+  public int hashCode()
+  {
+
+    return Objects.hash(task, status);
+  }
+
+  @Override
+  public String toString()
+  {
+    return "TaskstatusResponse{" +
+           "task='" + task + '\'' +
+           ", status=" + status +
+           '}';
   }
 }

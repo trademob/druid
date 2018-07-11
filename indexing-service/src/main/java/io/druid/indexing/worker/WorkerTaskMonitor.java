@@ -25,7 +25,7 @@ import com.google.inject.Inject;
 import io.druid.client.indexing.IndexingService;
 import io.druid.discovery.DruidLeaderClient;
 import io.druid.indexer.TaskLocation;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.config.TaskConfig;
 import io.druid.indexing.common.task.Task;
 import io.druid.indexing.overlord.TaskRunner;
@@ -137,7 +137,8 @@ public class WorkerTaskMonitor extends WorkerTaskManager
                     announcement.getTaskType(),
                     announcement.getTaskResource(),
                     completionStatus,
-                    TaskLocation.unknown()
+                    TaskLocation.unknown(),
+                    announcement.getTaskDataSource()
                 )
             );
           }

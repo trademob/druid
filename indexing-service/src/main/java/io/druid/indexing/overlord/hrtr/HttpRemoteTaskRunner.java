@@ -42,7 +42,7 @@ import io.druid.discovery.DruidNodeDiscovery;
 import io.druid.discovery.DruidNodeDiscoveryProvider;
 import io.druid.discovery.WorkerNodeService;
 import io.druid.indexer.TaskLocation;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.task.Task;
 import io.druid.indexing.overlord.ImmutableWorkerInfo;
 import io.druid.indexing.overlord.RemoteTaskRunnerWorkItem;
@@ -1340,7 +1340,7 @@ public class HttpRemoteTaskRunner implements WorkerTaskRunner, TaskLogStreamer
         State state
     )
     {
-      super(taskId, task == null ? null : task.getType(), worker, location);
+      super(taskId, task == null ? null : task.getType(), worker, location, task == null ? null : task.getDataSource());
       this.state = Preconditions.checkNotNull(state);
 
       // It is possible to have it null when the TaskRunner is just started and discovered this taskId from a worker,
