@@ -100,7 +100,6 @@ public class PlannerFactory
         operatorTable,
         macroTable,
         plannerConfig,
-        authorizerMapper,
         queryContext
     );
     final QueryMaker queryMaker = new QueryMaker(queryLifecycleFactory, plannerContext, jsonMapper);
