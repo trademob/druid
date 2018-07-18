@@ -159,9 +159,9 @@ public class SupervisorManager
 
   public boolean checkPointDataSourceMetadata(
       String supervisorId,
-      int taskGroupId,
-      DataSourceMetadata previousDataSourceMetadata,
-      DataSourceMetadata currentDataSourceMetadata
+      @Nullable String sequenceName,
+      @Nullable DataSourceMetadata previousDataSourceMetadata,
+      @Nullable DataSourceMetadata currentDataSourceMetadata
   )
   {
     try {
@@ -172,7 +172,7 @@ public class SupervisorManager
 
       Preconditions.checkNotNull(supervisor, "supervisor could not be found");
 
-      supervisor.lhs.checkpoint(taskGroupId, previousDataSourceMetadata, currentDataSourceMetadata);
+      supervisor.lhs.checkpoint(sequenceName, previousDataSourceMetadata, currentDataSourceMetadata);
       return true;
     }
     catch (Exception e) {
