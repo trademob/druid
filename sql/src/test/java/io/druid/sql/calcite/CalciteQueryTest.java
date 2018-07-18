@@ -176,7 +176,7 @@ public class CalciteQueryTest
     @Override
     public DateTimeZone getSqlTimeZone()
     {
-      return DateTimes.inferTzfromString("America/Los_Angeles");
+      return DateTimeZone.forID("America/Los_Angeles");
     }
   };
 
@@ -5550,7 +5550,7 @@ public class CalciteQueryTest
             Druids.newTimeseriesQueryBuilder()
                   .dataSource(CalciteTests.DATASOURCE1)
                   .intervals(QSS(Filtration.eternity()))
-                  .granularity(new PeriodGranularity(Period.months(1), null, DateTimes.inferTzfromString(LOS_ANGELES)))
+                  .granularity(new PeriodGranularity(Period.months(1), null, DateTimeZone.forID(LOS_ANGELES)))
                   .aggregators(AGGS(new LongSumAggregatorFactory("a0", "cnt")))
                   .context(TIMESERIES_CONTEXT_DEFAULT)
                   .build()
