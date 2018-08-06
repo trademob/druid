@@ -71,7 +71,7 @@ public class OnheapIncrementalIndex extends IncrementalIndex<Aggregator>
     this.maxRowCount = maxRowCount;
 
     this.facts = incrementalIndexSchema.isRollup() ? new RollupFactsHolder(sortFacts, dimsComparator(), getDimensions())
-                                                   : new PlainFactsHolder(sortFacts);
+                                                   : new PlainFactsHolder(sortFacts, dimsComparator());
   }
 
   @Override

@@ -78,6 +78,7 @@ import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
@@ -92,6 +93,7 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 /**
  */
@@ -346,9 +348,24 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
     @VisibleForTesting
     public Builder setSimpleTestingIndexSchema(final AggregatorFactory... metrics)
     {
-      this.incrementalIndexSchema = new IncrementalIndexSchema.Builder()
-          .withMetrics(metrics)
-          .build();
+      return setSimpleTestingIndexSchema(null, metrics);
+    }
+
+
+    /**
+     * A helper method to set a simple index schema with controllable metrics and rollup, and default values for the
+     * other parameters. Note that this method is normally used for testing and benchmarking; it is unlikely that you
+     * would use it in production settings.
+     *
+     * @param metrics variable array of {@link AggregatorFactory} metrics
+     *
+     * @return this
+     */
+    @VisibleForTesting
+    public Builder setSimpleTestingIndexSchema(@Nullable Boolean rollup, final AggregatorFactory... metrics)
+    {
+      IncrementalIndexSchema.Builder builder = new IncrementalIndexSchema.Builder().withMetrics(metrics);
+      this.incrementalIndexSchema = rollup != null ? builder.withRollup(rollup).build() : builder.build();
       return this;
     }
 
@@ -1262,6 +1279,12 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
     Iterable<TimeAndDims> keySet();
 
     /**
+     * Get all {@link IncrementalIndexRow} to persist, ordered with {@link Comparator<IncrementalIndexRow>}
+     * @return
+     */
+    Iterable<TimeAndDims> persistIterable();
+
+    /**
      * @return the previous rowIndex associated with the specified key, or
      * {@code TimeAndDims#EMPTY_ROW_INDEX} if there was no mapping for the key.
      */
@@ -1345,6 +1368,13 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
     }
 
     @Override
+    public Iterable<TimeAndDims> persistIterable()
+    {
+      // with rollup, facts are already pre-sorted so just return keyset
+      return keySet();
+    }
+
+    @Override
     public int putIfAbsent(TimeAndDims key, int rowIndex)
     {
       // setRowIndex() must be called before facts.putIfAbsent() for visibility of rowIndex from concurrent readers.
@@ -1365,7 +1395,9 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
     private final boolean sortFacts;
     private final ConcurrentMap<Long, Deque<TimeAndDims>> facts;
 
-    public PlainFactsHolder(boolean sortFacts)
+    private final Comparator<TimeAndDims> incrementalIndexRowComparator;
+
+    public PlainFactsHolder(boolean sortFacts, Comparator<TimeAndDims> incrementalIndexRowComparator)
     {
       this.sortFacts = sortFacts;
       if (sortFacts) {
@@ -1373,6 +1405,7 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
       } else {
         this.facts = new ConcurrentHashMap<>();
       }
+      this.incrementalIndexRowComparator = incrementalIndexRowComparator;
     }
 
     @Override
@@ -1406,10 +1439,10 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
     public Iterator<TimeAndDims> iterator(boolean descending)
     {
       if (descending && sortFacts) {
-        return concat(((ConcurrentNavigableMap<Long, Deque<TimeAndDims>>) facts)
+        return timeOrderedConcat(((ConcurrentNavigableMap<Long, Deque<TimeAndDims>>) facts)
                 .descendingMap().values(), true).iterator();
       }
-      return concat(facts.values(), false).iterator();
+      return timeOrderedConcat(facts.values(), false).iterator();
     }
 
     @Override
@@ -1418,10 +1451,10 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
       ConcurrentNavigableMap<Long, Deque<TimeAndDims>> subMap =
           ((ConcurrentNavigableMap<Long, Deque<TimeAndDims>>) facts).subMap(timeStart, timeEnd);
       final Map<Long, Deque<TimeAndDims>> rangeMap = descending ? subMap.descendingMap() : subMap;
-      return concat(rangeMap.values(), descending);
+      return timeOrderedConcat(rangeMap.values(), descending);
     }
 
-    private Iterable<TimeAndDims> concat(
+    private Iterable<TimeAndDims> timeOrderedConcat(
         final Iterable<Deque<TimeAndDims>> iterable,
         final boolean descending
     )
@@ -1434,10 +1467,25 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
       );
     }
 
+    private Stream<TimeAndDims> timeAndDimsOrderedConcat(
+        final Collection<Deque<TimeAndDims>> rowGroups
+    )
+    {
+      return rowGroups.stream()
+                      .flatMap(Collection::stream)
+                      .sorted(incrementalIndexRowComparator);
+    }
+
     @Override
     public Iterable<TimeAndDims> keySet()
     {
-      return concat(facts.values(), false);
+      return timeOrderedConcat(facts.values(), false);
+    }
+
+    @Override
+    public Iterable<TimeAndDims> persistIterable()
+    {
+      return () -> timeAndDimsOrderedConcat(facts.values()).iterator();
     }
 
     @Override
