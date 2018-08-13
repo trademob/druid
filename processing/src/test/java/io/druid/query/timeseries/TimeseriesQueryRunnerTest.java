@@ -72,6 +72,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -407,6 +408,101 @@ public class TimeseriesQueryRunnerTest
     );
 
     assertExpectedResults(expectedResults, results);
+  }
+
+  @Test
+  public void testTimeseriesGrandTotal()
+  {
+    TimeseriesQuery query = Druids.newTimeseriesQueryBuilder()
+                                  .dataSource(QueryRunnerTestHelper.dataSource)
+                                  .granularity(QueryRunnerTestHelper.dayGran)
+                                  .intervals(QueryRunnerTestHelper.firstToThird)
+                                  .aggregators(
+                                      Arrays.asList(
+                                          QueryRunnerTestHelper.rowsCount,
+                                          QueryRunnerTestHelper.indexLongSum,
+                                          QueryRunnerTestHelper.qualityUniques
+                                      )
+                                  )
+                                  .postAggregators(QueryRunnerTestHelper.addRowsIndexConstant)
+                                  .descending(descending)
+                                  .context(ImmutableMap.of(TimeseriesQuery.CTX_GRAND_TOTAL, true))
+                                  .build();
+
+    List<Result<TimeseriesResultValue>> expectedResults = new ArrayList<>();
+
+    expectedResults.add(
+        new Result<>(
+            DateTimes.of("2011-04-01"),
+            new TimeseriesResultValue(
+                ImmutableMap.of(
+                    "rows",
+                    13L,
+                    "index",
+                    6619L,
+                    "uniques",
+                    QueryRunnerTestHelper.UNIQUES_9,
+                    QueryRunnerTestHelper.addRowsIndexConstantMetric,
+                    6633.0
+                )
+            )
+        )
+    );
+
+    expectedResults.add(
+        new Result<>(
+            DateTimes.of("2011-04-02"),
+            new TimeseriesResultValue(
+                ImmutableMap.of(
+                    "rows",
+                    13L,
+                    "index",
+                    5827L,
+                    "uniques",
+                    QueryRunnerTestHelper.UNIQUES_9,
+                    QueryRunnerTestHelper.addRowsIndexConstantMetric,
+                    5841.0
+                )
+            )
+        )
+    );
+
+    if (descending) {
+      Collections.reverse(expectedResults);
+    }
+
+    expectedResults.add(
+        new Result<>(
+            null,
+            new TimeseriesResultValue(
+                ImmutableMap.of(
+                    "rows",
+                    26L,
+                    "index",
+                    12446L,
+                    "uniques",
+                    QueryRunnerTestHelper.UNIQUES_9,
+                    QueryRunnerTestHelper.addRowsIndexConstantMetric,
+                    12473.0
+                )
+            )
+        )
+    );
+
+    // Must create a toolChest so we can run mergeResults (which applies grand totals).
+    QueryToolChest<Result<TimeseriesResultValue>, TimeseriesQuery> toolChest = new TimeseriesQueryQueryToolChest(
+        QueryRunnerTestHelper.NoopIntervalChunkingQueryRunnerDecorator()
+    );
+
+    // Must wrapped in a results finalizer to stop the runner's builtin finalizer from being called.
+    final FinalizeResultsQueryRunner finalRunner = new FinalizeResultsQueryRunner(
+        toolChest.mergeResults(runner),
+        toolChest
+    );
+
+    final List results = Sequences.toList(finalRunner.run(QueryPlus.wrap(query), CONTEXT), new ArrayList());
+
+    TestHelper.assertExpectedResults(expectedResults, results);
   }
 
   @Test
@@ -2427,5 +2523,37 @@ public class TimeseriesQueryRunnerTest
     );
     TestHelper.assertExpectedResults(expectedResults, results2);
 
+  }
+
+  @Test
+  public void testTimeseriesWithLimit()
+  {
+    TimeseriesQuery query = Druids.newTimeseriesQueryBuilder()
+                                  .dataSource(QueryRunnerTestHelper.dataSource)
+                                  .granularity(QueryRunnerTestHelper.dayGran)
+                                  .intervals(QueryRunnerTestHelper.fullOnInterval)
+                                  .aggregators(
+                                      Arrays.<AggregatorFactory>asList(
+                                          QueryRunnerTestHelper.rowsCount,
+                                          QueryRunnerTestHelper.qualityUniques
+                                      )
+                                  )
+                                  .descending(descending)
+                                  .limit(10)
+                                  .build();
+
+    // Must create a toolChest so we can run mergeResults.
+    QueryToolChest<Result<TimeseriesResultValue>, TimeseriesQuery> toolChest = new TimeseriesQueryQueryToolChest(
+        QueryRunnerTestHelper.NoopIntervalChunkingQueryRunnerDecorator()
+    );
+
+    // Must wrapped in a results finalizer to stop the runner's builtin finalizer from being called.
+    final FinalizeResultsQueryRunner finalRunner = new FinalizeResultsQueryRunner(
+        toolChest.mergeResults(runner),
+        toolChest
+    );
+
+    final List list = Sequences.toList(finalRunner.run(QueryPlus.wrap(query), CONTEXT), new ArrayList());
+    Assert.assertEquals(10, list.size());
   }
 }

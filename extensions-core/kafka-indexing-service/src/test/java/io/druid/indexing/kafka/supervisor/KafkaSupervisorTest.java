@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package io.druid.indexing.kafka.supervisor;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -34,8 +33,8 @@ import io.druid.data.input.impl.StringDimensionSchema;
 import io.druid.data.input.impl.StringInputRowParser;
 import io.druid.data.input.impl.TimestampSpec;
 import io.druid.indexer.TaskLocation;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.TaskInfoProvider;
-import io.druid.indexing.common.TaskStatus;
 import io.druid.indexing.common.task.RealtimeIndexTask;
 import io.druid.indexing.common.task.Task;
 import io.druid.indexing.kafka.KafkaDataSourceMetadata;
@@ -1041,7 +1040,7 @@ public class KafkaSupervisorTest extends EasyMockSupport
     List<Task> tasks = captured.getValues();
     Collection workItems = new ArrayList<>();
     for (Task task : tasks) {
-      workItems.add(new TestTaskRunnerWorkItem(task.getId(), null, location));
+      workItems.add(new TestTaskRunnerWorkItem(task, null, location));
     }
 
     reset(taskStorage, taskRunner, taskClient, taskQueue);
@@ -1124,7 +1123,7 @@ public class KafkaSupervisorTest extends EasyMockSupport
     );
 
     Collection workItems = new ArrayList<>();
-    workItems.add(new TestTaskRunnerWorkItem(task.getId(), null, location));
+    workItems.add(new TestTaskRunnerWorkItem(task, null, location));
 
     Capture<KafkaIndexTask> captured = Capture.newInstance();
     expect(taskMaster.getTaskQueue()).andReturn(Optional.of(taskQueue)).anyTimes();
@@ -1218,7 +1217,7 @@ public class KafkaSupervisorTest extends EasyMockSupport
     );
 
     Collection workItems = new ArrayList<>();
-    workItems.add(new TestTaskRunnerWorkItem(task.getId(), null, location));
+    workItems.add(new TestTaskRunnerWorkItem(task, null, location));
 
     Capture<KafkaIndexTask> captured = Capture.newInstance();
     expect(taskMaster.getTaskQueue()).andReturn(Optional.of(taskQueue)).anyTimes();
@@ -1320,8 +1319,8 @@ public class KafkaSupervisorTest extends EasyMockSupport
     );
 
     Collection workItems = new ArrayList<>();
-    workItems.add(new TestTaskRunnerWorkItem(id1.getId(), null, location1));
-    workItems.add(new TestTaskRunnerWorkItem(id2.getId(), null, location2));
+    workItems.add(new TestTaskRunnerWorkItem(id1, null, location1));
+    workItems.add(new TestTaskRunnerWorkItem(id2, null, location2));
 
     expect(taskMaster.getTaskQueue()).andReturn(Optional.of(taskQueue)).anyTimes();
     expect(taskMaster.getTaskRunner()).andReturn(Optional.of(taskRunner)).anyTimes();
@@ -1480,7 +1479,7 @@ public class KafkaSupervisorTest extends EasyMockSupport
     List<Task> tasks = captured.getValues();
     Collection workItems = new ArrayList<>();
     for (Task task : tasks) {
-      workItems.add(new TestTaskRunnerWorkItem(task.getId(), null, location));
+      workItems.add(new TestTaskRunnerWorkItem(task, null, location));
     }
 
     reset(taskStorage, taskRunner, taskClient, taskQueue);
@@ -1559,7 +1558,7 @@ public class KafkaSupervisorTest extends EasyMockSupport
     List<Task> tasks = captured.getValues();
     Collection workItems = new ArrayList<>();
     for (Task task : tasks) {
-      workItems.add(new TestTaskRunnerWorkItem(task.getId(), null, location));
+      workItems.add(new TestTaskRunnerWorkItem(task, null, location));
     }
 
     reset(taskStorage, taskRunner, taskClient, taskQueue);
@@ -1680,8 +1679,8 @@ public class KafkaSupervisorTest extends EasyMockSupport
     );
 
     Collection workItems = new ArrayList<>();
-    workItems.add(new TestTaskRunnerWorkItem(id1.getId(), null, location1));
-    workItems.add(new TestTaskRunnerWorkItem(id2.getId(), null, location2));
+    workItems.add(new TestTaskRunnerWorkItem(id1, null, location1));
+    workItems.add(new TestTaskRunnerWorkItem(id2, null, location2));
 
     expect(taskMaster.getTaskQueue()).andReturn(Optional.of(taskQueue)).anyTimes();
     expect(taskMaster.getTaskRunner()).andReturn(Optional.of(taskRunner)).anyTimes();
@@ -1886,8 +1885,8 @@ public class KafkaSupervisorTest extends EasyMockSupport
     );
 
     Collection workItems = new ArrayList<>();
-    workItems.add(new TestTaskRunnerWorkItem(id1.getId(), null, location1));
-    workItems.add(new TestTaskRunnerWorkItem(id2.getId(), null, location2));
+    workItems.add(new TestTaskRunnerWorkItem(id1, null, location1));
+    workItems.add(new TestTaskRunnerWorkItem(id2, null, location2));
 
     expect(taskMaster.getTaskQueue()).andReturn(Optional.of(taskQueue)).anyTimes();
     expect(taskMaster.getTaskRunner()).andReturn(Optional.of(taskRunner)).anyTimes();
@@ -2345,13 +2344,16 @@ public class KafkaSupervisorTest extends EasyMockSupport
 
   private static class TestTaskRunnerWorkItem extends TaskRunnerWorkItem
   {
+    private final String taskType;
+    private final TaskLocation location;
+    private final String dataSource;
 
-    private TaskLocation location;
-
-    public TestTaskRunnerWorkItem(String taskId, ListenableFuture<TaskStatus> result, TaskLocation location)
+    public TestTaskRunnerWorkItem(Task task, ListenableFuture<TaskStatus> result, TaskLocation location)
     {
-      super(taskId, result);
+      super(task.getId(), result);
+      this.taskType = task.getType();
       this.location = location;
+      this.dataSource = task.getDataSource();
     }
 
     @Override
@@ -2359,6 +2361,19 @@ public class KafkaSupervisorTest extends EasyMockSupport
     {
       return location;
     }
+
+    @Override
+    public String getTaskType()
+    {
+      return taskType;
+    }
+
+    @Override
+    public String getDataSource()
+    {
+      return dataSource;
+    }
+
   }
 
   private static class TestableKafkaSupervisor extends KafkaSupervisor

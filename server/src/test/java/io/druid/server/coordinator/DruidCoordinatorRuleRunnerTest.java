@@ -205,7 +205,7 @@ public class DruidCoordinatorRuleRunnerTest
             .withSegmentReplicantLookup(SegmentReplicantLookup.make(new DruidCluster()))
             .withBalancerStrategy(balancerStrategy)
             .withBalancerReferenceTimestamp(DateTimes.of("2013-01-01"))
-            .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMaxSegmentsToMove(5).build())
+            .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMaxSegmentsToMove(5).build())
             .build();
 
     DruidCoordinatorRuntimeParams afterParams = ruleRunner.run(params);
@@ -609,7 +609,7 @@ public class DruidCoordinatorRuleRunnerTest
 
     DruidCoordinatorRuntimeParams params = new DruidCoordinatorRuntimeParams.Builder()
         .withDruidCluster(druidCluster)
-        .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMillisToWaitBeforeDeleting(0L).build())
+        .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMillisToWaitBeforeDeleting(0L).build())
         .withAvailableSegments(availableSegments)
         .withDatabaseRuleManager(databaseRuleManager)
         .withSegmentReplicantLookup(segmentReplicantLookup)
@@ -695,7 +695,7 @@ public class DruidCoordinatorRuleRunnerTest
 
     DruidCoordinatorRuntimeParams params = new DruidCoordinatorRuntimeParams.Builder()
         .withDruidCluster(druidCluster)
-        .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMillisToWaitBeforeDeleting(0L).build())
+        .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMillisToWaitBeforeDeleting(0L).build())
         .withAvailableSegments(availableSegments)
         .withDatabaseRuleManager(databaseRuleManager)
         .withSegmentReplicantLookup(segmentReplicantLookup)
@@ -786,7 +786,7 @@ public class DruidCoordinatorRuleRunnerTest
 
     DruidCoordinatorRuntimeParams params = new DruidCoordinatorRuntimeParams.Builder()
         .withDruidCluster(druidCluster)
-        .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMillisToWaitBeforeDeleting(0L).build())
+        .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMillisToWaitBeforeDeleting(0L).build())
         .withAvailableSegments(availableSegments)
         .withDatabaseRuleManager(databaseRuleManager)
         .withSegmentReplicantLookup(segmentReplicantLookup)
@@ -873,7 +873,7 @@ public class DruidCoordinatorRuleRunnerTest
 
     DruidCoordinatorRuntimeParams params = new DruidCoordinatorRuntimeParams.Builder()
         .withDruidCluster(druidCluster)
-        .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMillisToWaitBeforeDeleting(0L).build())
+        .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMillisToWaitBeforeDeleting(0L).build())
         .withAvailableSegments(availableSegments)
         .withDatabaseRuleManager(databaseRuleManager)
         .withSegmentReplicantLookup(segmentReplicantLookup)
@@ -977,7 +977,7 @@ public class DruidCoordinatorRuleRunnerTest
 
     DruidCoordinatorRuntimeParams params = new DruidCoordinatorRuntimeParams.Builder()
         .withDruidCluster(druidCluster)
-        .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMillisToWaitBeforeDeleting(0L).build())
+        .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMillisToWaitBeforeDeleting(0L).build())
         .withAvailableSegments(availableSegments)
         .withDatabaseRuleManager(databaseRuleManager)
         .withSegmentReplicantLookup(segmentReplicantLookup)
@@ -1292,7 +1292,7 @@ public class DruidCoordinatorRuleRunnerTest
 
     DruidCoordinatorRuntimeParams params = new DruidCoordinatorRuntimeParams.Builder()
         .withDruidCluster(druidCluster)
-        .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMillisToWaitBeforeDeleting(0L).build())
+        .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMillisToWaitBeforeDeleting(0L).build())
         .withAvailableSegments(longerAvailableSegments)
         .withDatabaseRuleManager(databaseRuleManager)
         .withSegmentReplicantLookup(segmentReplicantLookup)
@@ -1383,7 +1383,7 @@ public class DruidCoordinatorRuleRunnerTest
             .withSegmentReplicantLookup(SegmentReplicantLookup.make(new DruidCluster()))
             .withBalancerStrategy(balancerStrategy)
             .withBalancerReferenceTimestamp(DateTimes.of("2013-01-01"))
-            .withDynamicConfigs(new CoordinatorDynamicConfig.Builder().withMaxSegmentsToMove(5).build())
+            .withDynamicConfigs(CoordinatorDynamicConfig.builder().withMaxSegmentsToMove(5).build())
             .build();
 
     DruidCoordinatorRuntimeParams afterParams = ruleRunner.run(params);

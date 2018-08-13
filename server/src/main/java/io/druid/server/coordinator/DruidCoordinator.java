@@ -64,6 +64,7 @@ import io.druid.server.coordinator.helper.DruidCoordinatorCleanupUnneeded;
 import io.druid.server.coordinator.helper.DruidCoordinatorHelper;
 import io.druid.server.coordinator.helper.DruidCoordinatorLogger;
 import io.druid.server.coordinator.helper.DruidCoordinatorRuleRunner;
+import io.druid.server.coordinator.helper.DruidCoordinatorSegmentCompactor;
 import io.druid.server.coordinator.helper.DruidCoordinatorSegmentInfoLoader;
 import io.druid.server.coordinator.rules.LoadRule;
 import io.druid.server.coordinator.rules.Rule;
@@ -123,6 +124,8 @@ public class DruidCoordinator
   private final BalancerStrategyFactory factory;
   private final LookupCoordinatorManager lookupCoordinatorManager;
   private final DruidLeaderSelector coordLeaderSelector;
+
+  private final DruidCoordinatorSegmentCompactor segmentCompactor;
 
   @Inject
   public DruidCoordinator(
@@ -209,6 +212,8 @@ public class DruidCoordinator
     this.factory = factory;
     this.lookupCoordinatorManager = lookupCoordinatorManager;
     this.coordLeaderSelector = coordLeaderSelector;
+
+    this.segmentCompactor = new DruidCoordinatorSegmentCompactor(indexingServiceClient);
   }
 
   public boolean isLeader()
@@ -310,12 +315,26 @@ public class DruidCoordinator
     return loadStatus;
   }
 
+  public long remainingSegmentSizeBytesForCompaction(String dataSource)
+  {
+    return segmentCompactor.getRemainingSegmentSizeBytes(dataSource);
+  }
+
   public CoordinatorDynamicConfig getDynamicConfigs()
   {
     return configManager.watch(
         CoordinatorDynamicConfig.CONFIG_KEY,
         CoordinatorDynamicConfig.class,
-        new CoordinatorDynamicConfig.Builder().build()
+        CoordinatorDynamicConfig.builder().build()
+    ).get();
+  }
+
+  public CoordinatorCompactionConfig getCompactionConfig()
+  {
+    return configManager.watch(
+        CoordinatorCompactionConfig.CONFIG_KEY,
+        CoordinatorCompactionConfig.class,
+        CoordinatorCompactionConfig.empty()
     ).get();
   }
 
@@ -589,9 +608,13 @@ public class DruidCoordinator
   {
     List<DruidCoordinatorHelper> helpers = Lists.newArrayList();
     helpers.add(new DruidCoordinatorSegmentInfoLoader(DruidCoordinator.this));
+    helpers.add(segmentCompactor);
     helpers.addAll(indexingServiceHelpers);
 
-    log.info("Done making indexing service helpers [%s]", helpers);
+    log.info(
+        "Done making indexing service helpers [%s]",
+        helpers.stream().map(helper -> helper.getClass().getCanonicalName()).collect(Collectors.toList())
+    );
     return ImmutableList.copyOf(helpers);
   }
 
@@ -640,13 +663,14 @@ public class DruidCoordinator
 
         // Do coordinator stuff.
         DruidCoordinatorRuntimeParams params =
-                DruidCoordinatorRuntimeParams.newBuilder()
-                        .withStartTime(startTime)
-                        .withDatasources(metadataSegmentManager.getInventory())
-                        .withDynamicConfigs(getDynamicConfigs())
-                        .withEmitter(emitter)
-                        .withBalancerStrategy(balancerStrategy)
-                        .build();
+            DruidCoordinatorRuntimeParams.newBuilder()
+                                         .withStartTime(startTime)
+                                         .withDataSources(metadataSegmentManager.getInventory())
+                                         .withDynamicConfigs(getDynamicConfigs())
+                                         .withCompactionConfig(getCompactionConfig())
+                                         .withEmitter(emitter)
+                                         .withBalancerStrategy(balancerStrategy)
+                                         .build();
         for (DruidCoordinatorHelper helper : helpers) {
           // Don't read state and run state in the same helper otherwise racy conditions may exist
           if (coordLeaderSelector.isLeader() && startingLeaderCounter == coordLeaderSelector.localTerm()) {
@@ -672,63 +696,58 @@ public class DruidCoordinator
       super(
           ImmutableList.of(
               new DruidCoordinatorSegmentInfoLoader(DruidCoordinator.this),
-              new DruidCoordinatorHelper()
-              {
-                @Override
-                public DruidCoordinatorRuntimeParams run(DruidCoordinatorRuntimeParams params)
-                {
-                  // Display info about all historical servers
-                  Iterable<ImmutableDruidServer> servers = FunctionalIterable
-                      .create(serverInventoryView.getInventory())
-                      .filter(DruidServer::segmentReplicatable)
-                      .transform(DruidServer::toImmutableDruidServer);
+              params -> {
+                // Display info about all historical servers
+                Iterable<ImmutableDruidServer> servers = FunctionalIterable
+                    .create(serverInventoryView.getInventory())
+                    .filter(DruidServer::segmentReplicatable)
+                    .transform(DruidServer::toImmutableDruidServer);
 
-                  if (log.isDebugEnabled()) {
-                    log.debug("Servers");
-                    for (ImmutableDruidServer druidServer : servers) {
-                      log.debug("  %s", druidServer);
-                      log.debug("    -- DataSources");
-                      for (ImmutableDruidDataSource druidDataSource : druidServer.getDataSources()) {
-                        log.debug("    %s", druidDataSource);
-                      }
+                if (log.isDebugEnabled()) {
+                  log.debug("Servers");
+                  for (ImmutableDruidServer druidServer : servers) {
+                    log.debug("  %s", druidServer);
+                    log.debug("    -- DataSources");
+                    for (ImmutableDruidDataSource druidDataSource : druidServer.getDataSources()) {
+                      log.debug("    %s", druidDataSource);
                     }
                   }
-
-                  // Find all historical servers, group them by subType and sort by ascending usage
-                  final DruidCluster cluster = new DruidCluster();
-                  for (ImmutableDruidServer server : servers) {
-                    if (!loadManagementPeons.containsKey(server.getName())) {
-                      LoadQueuePeon loadQueuePeon = taskMaster.giveMePeon(server);
-                      loadQueuePeon.start();
-                      log.info("Created LoadQueuePeon for server[%s].", server.getName());
-
-                      loadManagementPeons.put(server.getName(), loadQueuePeon);
-                    }
-
-                    cluster.add(new ServerHolder(server, loadManagementPeons.get(server.getName())));
-                  }
-
-                  segmentReplicantLookup = SegmentReplicantLookup.make(cluster);
-
-                  // Stop peons for servers that aren't there anymore.
-                  final Set<String> disappeared = Sets.newHashSet(loadManagementPeons.keySet());
-                  for (ImmutableDruidServer server : servers) {
-                    disappeared.remove(server.getName());
-                  }
-                  for (String name : disappeared) {
-                    log.info("Removing listener for server[%s] which is no longer there.", name);
-                    LoadQueuePeon peon = loadManagementPeons.remove(name);
-                    peon.stop();
-                  }
-
-                  return params.buildFromExisting()
-                               .withDruidCluster(cluster)
-                               .withDatabaseRuleManager(metadataRuleManager)
-                               .withLoadManagementPeons(loadManagementPeons)
-                               .withSegmentReplicantLookup(segmentReplicantLookup)
-                               .withBalancerReferenceTimestamp(DateTimes.nowUtc())
-                               .build();
                 }
+
+                // Find all historical servers, group them by subType and sort by ascending usage
+                final DruidCluster cluster = new DruidCluster();
+                for (ImmutableDruidServer server : servers) {
+                  if (!loadManagementPeons.containsKey(server.getName())) {
+                    LoadQueuePeon loadQueuePeon = taskMaster.giveMePeon(server);
+                    loadQueuePeon.start();
+                    log.info("Created LoadQueuePeon for server[%s].", server.getName());
+
+                    loadManagementPeons.put(server.getName(), loadQueuePeon);
+                  }
+
+                  cluster.add(new ServerHolder(server, loadManagementPeons.get(server.getName())));
+                }
+
+                segmentReplicantLookup = SegmentReplicantLookup.make(cluster);
+
+                // Stop peons for servers that aren't there anymore.
+                final Set<String> disappeared = Sets.newHashSet(loadManagementPeons.keySet());
+                for (ImmutableDruidServer server : servers) {
+                  disappeared.remove(server.getName());
+                }
+                for (String name : disappeared) {
+                  log.info("Removing listener for server[%s] which is no longer there.", name);
+                  LoadQueuePeon peon = loadManagementPeons.remove(name);
+                  peon.stop();
+                }
+
+                return params.buildFromExisting()
+                             .withDruidCluster(cluster)
+                             .withDatabaseRuleManager(metadataRuleManager)
+                             .withLoadManagementPeons(loadManagementPeons)
+                             .withSegmentReplicantLookup(segmentReplicantLookup)
+                             .withBalancerReferenceTimestamp(DateTimes.nowUtc())
+                             .build();
               },
               new DruidCoordinatorRuleRunner(DruidCoordinator.this),
               new DruidCoordinatorCleanupUnneeded(DruidCoordinator.this),

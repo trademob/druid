@@ -242,7 +242,7 @@ public class LookupCoordinatorManager
           }
         }
       }
-      return configManager.set(LOOKUP_CONFIG_KEY, updatedSpec, auditInfo);
+      return configManager.set(LOOKUP_CONFIG_KEY, updatedSpec, auditInfo).isOk();
     }
   }
 
@@ -277,7 +277,7 @@ public class LookupCoordinatorManager
       final Map<String, LookupExtractorFactoryMapContainer> updateTierSpec = new HashMap<>(priorTierSpec);
       updateTierSpec.remove(lookup);
       updateSpec.put(tier, updateTierSpec);
-      return configManager.set(LOOKUP_CONFIG_KEY, updateSpec, auditInfo);
+      return configManager.set(LOOKUP_CONFIG_KEY, updateSpec, auditInfo).isOk();
     }
   }
 

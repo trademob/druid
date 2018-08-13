@@ -78,6 +78,7 @@ public class TimeseriesQueryQueryToolChestTest
                     new LongSumAggregatorFactory("metric0", "metric0")
                 ),
                 null,
+                0,
                 null
             )
         );

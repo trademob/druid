@@ -27,14 +27,18 @@ import com.google.common.io.ByteSource;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
 import io.druid.java.util.common.logger.Logger;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.concurrent.Callable;
 import java.util.zip.GZIPInputStream;
@@ -48,7 +52,9 @@ public class CompressionUtils
 {
   private static final Logger log = new Logger(CompressionUtils.class);
   private static final int DEFAULT_RETRY_COUNT = 3;
+  private static final String BZ2_SUFFIX = ".bz2";
   private static final String GZ_SUFFIX = ".gz";
+  private static final String XZ_SUFFIX = ".xz";
   private static final String ZIP_SUFFIX = ".zip";
 
   /**
@@ -232,6 +238,10 @@ public class CompressionUtils
       final Enumeration<? extends ZipEntry> enumeration = zipFile.entries();
       while (enumeration.hasMoreElements()) {
         final ZipEntry entry = enumeration.nextElement();
+        final File outFile = new File(outDir, entry.getName());
+
+        validateZipOutputFile(pulledFile.getCanonicalPath(), outFile, outDir);
+
         result.addFiles(
             FileUtils.retryCopy(
                 new ByteSource()
@@ -242,7 +252,7 @@ public class CompressionUtils
                     return new BufferedInputStream(zipFile.getInputStream(entry));
                   }
                 },
-                new File(outDir, entry.getName()),
+                outFile,
                 FileUtils.IS_EXCEPTION,
                 DEFAULT_RETRY_COUNT
             ).getFiles()
@@ -250,6 +260,25 @@ public class CompressionUtils
       }
     }
     return result;
+  }
+
+  public static void validateZipOutputFile(
+      String sourceFilename,
+      final File outFile,
+      final File outDir
+  ) throws IOException
+  {
+    // check for evil zip exploit that allows writing output to arbitrary directories
+    final File canonicalOutFile = outFile.getCanonicalFile();
+    final String canonicalOutDir = outDir.getCanonicalPath();
+    if (!canonicalOutFile.toPath().startsWith(canonicalOutDir)) {
+      throw new ISE(
+          "Unzipped output path[%s] of sourceFile[%s] does not start with outDir[%s].",
+          canonicalOutFile,
+          sourceFilename,
+          canonicalOutDir
+      );
+    }
   }
 
   /**
@@ -271,7 +300,10 @@ public class CompressionUtils
       ZipEntry entry;
       while ((entry = zipIn.getNextEntry()) != null) {
         final File file = new File(outDir, entry.getName());
+        validateZipOutputFile("", file, outDir);
+
         Files.asByteSink(file).writeFrom(zipIn);
+
         result.addFile(file);
         zipIn.closeEntry();
       }
@@ -316,6 +348,8 @@ public class CompressionUtils
    * @param in The raw input stream
    *
    * @return A GZIPInputStream that can handle concatenated gzip streams in the input
+   *
+   * @see #decompress(InputStream, String) which should be used instead for streams coming from files
    */
   public static GZIPInputStream gzipInputStream(final InputStream in) throws IOException
   {
@@ -521,5 +555,55 @@ public class CompressionUtils
       return reducedFname;
     }
     throw new IAE("[%s] is not a valid gz file name", fname);
+  }
+
+  /**
+   * Decompress an input stream from a file, based on the filename.
+   */
+  public static InputStream decompress(final InputStream in, final String fileName) throws IOException
+  {
+    if (fileName.endsWith(GZ_SUFFIX)) {
+      return gzipInputStream(in);
+    } else if (fileName.endsWith(BZ2_SUFFIX)) {
+      return new BZip2CompressorInputStream(in, true);
+    } else if (fileName.endsWith(XZ_SUFFIX)) {
+      return new XZCompressorInputStream(in, true);
+    } else if (fileName.endsWith(ZIP_SUFFIX)) {
+      // This reads the first file in the archive.
+      final ZipInputStream zipIn = new ZipInputStream(in, StandardCharsets.UTF_8);
+      try {
+        final ZipEntry nextEntry = zipIn.getNextEntry();
+        if (nextEntry == null) {
+          zipIn.close();
+
+          // No files in the archive - return an empty stream.
+          return new ByteArrayInputStream(new byte[0]);
+        }
+        return zipIn;
+      }
+      catch (IOException e) {
+        try {
+          zipIn.close();
+        }
+        catch (IOException e2) {
+          e.addSuppressed(e2);
+        }
+        throw e;
+      }
+    } else {
+      return in;
+    }
+  }
+
+  // Helper method for unit tests (for checking that we fixed https://snyk.io/research/zip-slip-vulnerability)
+  public static void makeEvilZip(File outputFile) throws IOException
+  {
+    ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(outputFile));
+    ZipEntry zipEntry = new ZipEntry("../../../../../../../../../../../../../../../tmp/evil.txt");
+    zipOutputStream.putNextEntry(zipEntry);
+    byte[] output = StringUtils.toUtf8("evil text");
+    zipOutputStream.write(output);
+    zipOutputStream.closeEntry();
+    zipOutputStream.close();
   }
 }

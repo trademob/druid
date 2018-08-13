@@ -36,7 +36,7 @@ import io.druid.java.util.common.concurrent.Execs;
 import io.druid.concurrent.TaskThreadPriority;
 import io.druid.guice.annotations.Self;
 import io.druid.indexer.TaskLocation;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.TaskToolbox;
 import io.druid.indexing.common.TaskToolboxFactory;
 import io.druid.indexing.common.config.TaskConfig;
@@ -411,6 +411,19 @@ public class ThreadPoolTaskRunner implements TaskRunner, QuerySegmentWalker
     {
       return location;
     }
+
+    @Override
+    public String getTaskType()
+    {
+      return task.getType();
+    }
+    
+    @Override
+    public String getDataSource()
+    {
+      return task.getDataSource();
+    }
+
   }
 
   private class ThreadPoolTaskRunnerCallable implements Callable<TaskStatus>

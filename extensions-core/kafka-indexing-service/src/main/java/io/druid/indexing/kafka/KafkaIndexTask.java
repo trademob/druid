@@ -48,9 +48,9 @@ import io.druid.data.input.impl.InputRowParser;
 import io.druid.discovery.DiscoveryDruidNode;
 import io.druid.discovery.DruidNodeDiscoveryProvider;
 import io.druid.discovery.LookupNodeService;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.appenderator.ActionBasedSegmentAllocator;
 import io.druid.indexing.appenderator.ActionBasedUsedSegmentChecker;
-import io.druid.indexing.common.TaskStatus;
 import io.druid.indexing.common.TaskToolbox;
 import io.druid.indexing.common.actions.CheckPointDataSourceMetadataAction;
 import io.druid.indexing.common.actions.ResetDataSourceMetadataAction;
@@ -1088,6 +1088,10 @@ public class KafkaIndexTask extends AbstractTask implements ChatHandler
             }
           }
         }
+      }
+      catch (Exception e) {
+        log.error(e, "Encountered exception in runLegacy() before persisting.");
+        throw e;
       }
       finally {
         driver.persist(committerSupplier.get()); // persist pending data

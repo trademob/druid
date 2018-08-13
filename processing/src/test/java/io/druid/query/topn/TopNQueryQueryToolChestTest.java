@@ -70,11 +70,6 @@ public class TopNQueryQueryToolChestTest
   }
 
   @Test
-  public void testCacheStrategyWithFloatDimension() throws Exception
-  {
-  }
-
-  @Test
   public void testComputeCacheKeyWithDifferentPostAgg() throws Exception
   {
     final TopNQuery query1 = new TopNQuery(

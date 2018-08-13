@@ -23,12 +23,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.google.inject.Inject;
 import io.druid.java.util.common.granularity.Granularity;
 import io.druid.java.util.common.guava.Sequence;
+import io.druid.java.util.common.guava.Sequences;
 import io.druid.java.util.common.guava.nary.BinaryFn;
 import io.druid.query.CacheStrategy;
 import io.druid.query.IntervalChunkingQueryRunnerDecorator;
@@ -46,6 +48,8 @@ import io.druid.query.cache.CacheKeyBuilder;
 import org.joda.time.DateTime;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -88,7 +92,8 @@ public class TimeseriesQueryQueryToolChest extends QueryToolChest<Result<Timeser
       QueryRunner<Result<TimeseriesResultValue>> queryRunner
   )
   {
-    return new ResultMergeQueryRunner<Result<TimeseriesResultValue>>(queryRunner)
+    final QueryRunner<Result<TimeseriesResultValue>> resultMergeQueryRunner = new ResultMergeQueryRunner<Result<TimeseriesResultValue>>(
+        queryRunner)
     {
       @Override
       public Sequence<Result<TimeseriesResultValue>> doRun(
@@ -97,12 +102,17 @@ public class TimeseriesQueryQueryToolChest extends QueryToolChest<Result<Timeser
           Map<String, Object> context
       )
       {
-        return super.doRun(
+        int limit = ((TimeseriesQuery) queryPlus.getQuery()).getLimit();
+        Sequence<Result<TimeseriesResultValue>> result = super.doRun(
             baseRunner,
             // Don't do post aggs until makePostComputeManipulatorFn() is called
             queryPlus.withQuery(((TimeseriesQuery) queryPlus.getQuery()).withPostAggregatorSpecs(ImmutableList.of())),
             context
         );
+        if (limit < Integer.MAX_VALUE) {
+          return Sequences.limit(result, limit);
+        }
+        return result;
       }
 
       @Override
@@ -123,6 +133,71 @@ public class TimeseriesQueryQueryToolChest extends QueryToolChest<Result<Timeser
             query.getGranularity(),
             query.getAggregatorSpecs()
         );
+      }
+    };
+
+    return new QueryRunner<Result<TimeseriesResultValue>>()
+    {
+      @Override
+      public Sequence<Result<TimeseriesResultValue>> run(
+          final QueryPlus<Result<TimeseriesResultValue>> queryPlus,
+          final Map<String, Object> responseContext
+      )
+      {
+        final TimeseriesQuery query = (TimeseriesQuery) queryPlus.getQuery();
+        final Sequence<Result<TimeseriesResultValue>> baseResults = resultMergeQueryRunner.run(
+            queryPlus.withQuery(
+                queryPlus.getQuery()
+                         .withOverriddenContext(
+                             ImmutableMap.of(TimeseriesQuery.CTX_GRAND_TOTAL, false)
+                         )
+            ),
+            responseContext
+        );
+
+        if (query.isGrandTotal()) {
+          // Accumulate grand totals while iterating the sequence.
+          final Object[] grandTotals = new Object[query.getAggregatorSpecs().size()];
+          final Sequence<Result<TimeseriesResultValue>> mappedSequence = Sequences.map(
+              baseResults,
+              resultValue -> {
+                for (int i = 0; i < query.getAggregatorSpecs().size(); i++) {
+                  final AggregatorFactory aggregatorFactory = query.getAggregatorSpecs().get(i);
+                  final Object value = resultValue.getValue().getMetric(aggregatorFactory.getName());
+                  if (grandTotals[i] == null) {
+                    grandTotals[i] = value;
+                  } else {
+                    grandTotals[i] = aggregatorFactory.combine(grandTotals[i], value);
+                  }
+                }
+                return resultValue;
+              }
+          );
+
+          return Sequences.concat(
+              ImmutableList.of(
+                  mappedSequence,
+                  Sequences.simple(
+                      () -> {
+                        final Map<String, Object> totalsMap = new HashMap<>();
+
+                        for (int i = 0; i < query.getAggregatorSpecs().size(); i++) {
+                          totalsMap.put(query.getAggregatorSpecs().get(i).getName(), grandTotals[i]);
+                        }
+
+                        final Result<TimeseriesResultValue> result = new Result<>(
+                            null,
+                            new TimeseriesResultValue(totalsMap)
+                        );
+
+                        return Collections.singletonList(result).iterator();
+                      }
+                  )
+              )
+          );
+        } else {
+          return baseResults;
+        }
       }
     };
   }
@@ -164,6 +239,7 @@ public class TimeseriesQueryQueryToolChest extends QueryToolChest<Result<Timeser
             .appendCacheable(query.getDimensionsFilter())
             .appendCacheables(query.getAggregatorSpecs())
             .appendCacheable(query.getVirtualColumns())
+            .appendInt(query.getLimit())
             .build();
       }
 

@@ -32,7 +32,7 @@ import io.druid.discovery.DruidLeaderSelector;
 import io.druid.indexer.TaskLocation;
 import io.druid.indexer.TaskState;
 import io.druid.indexer.TaskStatusPlus;
-import io.druid.indexing.common.TaskStatus;
+import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.actions.TaskActionClientFactory;
 import io.druid.indexing.common.config.TaskStorageConfig;
 import io.druid.indexing.common.task.NoopTask;
@@ -263,7 +263,7 @@ public class OverlordTest
     // Wait for task runner to run task_1
     runTaskCountDownLatches[Integer.parseInt(taskId_1)].await();
 
-    response = overlordResource.getRunningTasks(req);
+    response = overlordResource.getRunningTasks(null, req);
     // 1 task that was manually inserted should be in running state
     Assert.assertEquals(1, (((List) response.getEntity()).size()));
     final TaskStatusPlus taskResponseObject = ((List<TaskStatusPlus>) response
@@ -388,6 +388,19 @@ public class OverlordTest
         {
           return TASK_LOCATION;
         }
+
+        @Override
+        public String getTaskType()
+        {
+          return task.getType();
+        }
+
+        @Override
+        public String getDataSource()
+        {
+          return task.getDataSource();
+        }
+
       };
       taskRunnerWorkItems.put(taskId, taskRunnerWorkItem);
       return future;
