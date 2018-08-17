@@ -28,6 +28,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.inject.Binder;
+import com.google.inject.Module;
 import io.druid.data.input.FirehoseFactory;
 import io.druid.data.input.impl.DimensionSchema;
 import io.druid.data.input.impl.DimensionsSpec;
@@ -42,9 +44,11 @@ import io.druid.guice.GuiceAnnotationIntrospector;
 import io.druid.guice.GuiceInjectableValues;
 import io.druid.guice.GuiceInjectors;
 import io.druid.indexing.common.TaskToolbox;
+import io.druid.indexing.common.TestUtils;
 import io.druid.indexing.common.actions.SegmentListUsedAction;
 import io.druid.indexing.common.actions.TaskAction;
 import io.druid.indexing.common.actions.TaskActionClient;
+import io.druid.indexing.common.stats.RowIngestionMetersFactory;
 import io.druid.indexing.common.task.CompactionTask.SegmentProvider;
 import io.druid.indexing.common.task.IndexTask.IndexIOConfig;
 import io.druid.indexing.common.task.IndexTask.IndexIngestionSpec;
@@ -78,8 +82,12 @@ import io.druid.segment.incremental.IncrementalIndex;
 import io.druid.segment.indexing.DataSchema;
 import io.druid.segment.indexing.granularity.ArbitraryGranularitySpec;
 import io.druid.segment.loading.SegmentLoadingException;
+import io.druid.segment.realtime.firehose.ChatHandlerProvider;
+import io.druid.segment.realtime.firehose.NoopChatHandlerProvider;
 import io.druid.segment.transform.TransformingInputRowParser;
 import io.druid.segment.writeout.OffHeapMemorySegmentWriteOutMediumFactory;
+import io.druid.server.security.AuthTestUtils;
+import io.druid.server.security.AuthorizerMapper;
 import io.druid.timeline.DataSegment;
 import io.druid.timeline.partition.NumberedShardSpec;
 import org.hamcrest.CoreMatchers;
@@ -126,6 +134,7 @@ public class CompactionTaskTest
   private static Map<String, DimensionSchema> DIMENSIONS;
   private static Map<String, AggregatorFactory> AGGREGATORS;
   private static List<DataSegment> SEGMENTS;
+  private static RowIngestionMetersFactory rowIngestionMetersFactory = new TestUtils().getRowIngestionMetersFactory();
   private static ObjectMapper objectMapper = setupInjectablesInObjectMapper(new DefaultObjectMapper());
   private static Map<DataSegment, File> segmentMap;
 
@@ -207,7 +216,23 @@ public class CompactionTaskTest
             guiceIntrospector, objectMapper.getDeserializationConfig().getAnnotationIntrospector()
         )
     );
-    objectMapper.setInjectableValues(new GuiceInjectableValues(GuiceInjectors.makeStartupInjector()));
+    GuiceInjectableValues injectableValues = new GuiceInjectableValues(
+        GuiceInjectors.makeStartupInjectorWithModules(
+            ImmutableList.<Module>of(
+                new Module()
+                {
+                  @Override
+                  public void configure(Binder binder)
+                  {
+                    binder.bind(AuthorizerMapper.class).toInstance(AuthTestUtils.TEST_AUTHORIZER_MAPPER);
+                    binder.bind(ChatHandlerProvider.class).toInstance(new NoopChatHandlerProvider());
+                    binder.bind(RowIngestionMetersFactory.class).toInstance(rowIngestionMetersFactory);
+                  }
+                }
+            )
+        )
+    );
+    objectMapper.setInjectableValues(injectableValues);
     objectMapper.registerModule(
         new SimpleModule().registerSubtypes(new NamedType(NumberedShardSpec.class, "NumberedShardSpec"))
     );
@@ -251,6 +276,9 @@ public class CompactionTaskTest
         false,
         null,
         100L,
+        null,
+        null,
+        null,
         null
     );
   }
@@ -270,7 +298,10 @@ public class CompactionTaskTest
         null,
         createTuningConfig(),
         ImmutableMap.of("testKey", "testContext"),
-        objectMapper
+        objectMapper,
+        AuthTestUtils.TEST_AUTHORIZER_MAPPER,
+        null,
+        rowIngestionMetersFactory
     );
     final byte[] bytes = objectMapper.writeValueAsBytes(task);
     final CompactionTask fromJson = objectMapper.readValue(bytes, CompactionTask.class);
@@ -296,7 +327,10 @@ public class CompactionTaskTest
         null,
         createTuningConfig(),
         ImmutableMap.of("testKey", "testContext"),
-        objectMapper
+        objectMapper,
+        AuthTestUtils.TEST_AUTHORIZER_MAPPER,
+        null,
+        rowIngestionMetersFactory
     );
     final byte[] bytes = objectMapper.writeValueAsBytes(task);
     final CompactionTask fromJson = objectMapper.readValue(bytes, CompactionTask.class);
@@ -532,7 +566,8 @@ public class CompactionTaskTest
           null,
           null,
           null,
-          null
+          null,
+          new NoopTestTaskFileWriter()
       );
       this.segmentFileMap = segmentFileMap;
     }

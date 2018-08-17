@@ -133,6 +133,8 @@ public class JobHelperTest
                 null,
                 false,
                 false,
+                null,
+                null,
                 null
             )
         )
