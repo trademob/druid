@@ -91,12 +91,6 @@ public class TaskRealtimeMetricsMonitor extends AbstractMonitor
 
     emitter.emit(builder.build("ingest/events/processed", rowIngestionMetersTotals.getProcessed() - previousRowIngestionMetersTotals.getProcessed()));
 
-    final long dedup = metrics.dedup() - previousFireDepartmentMetrics.dedup();
-    if (dedup > 0) {
-      log.warn("[%,d] duplicate events!", dedup);
-    }
-    emitter.emit(builder.build("ingest/events/duplicate", dedup));
-
     emitter.emit(builder.build("ingest/rows/output", metrics.rowOutput() - previousFireDepartmentMetrics.rowOutput()));
     emitter.emit(builder.build("ingest/persists/count", metrics.numPersists() - previousFireDepartmentMetrics.numPersists()));
     emitter.emit(builder.build("ingest/persists/time", metrics.persistTimeMillis() - previousFireDepartmentMetrics.persistTimeMillis()));

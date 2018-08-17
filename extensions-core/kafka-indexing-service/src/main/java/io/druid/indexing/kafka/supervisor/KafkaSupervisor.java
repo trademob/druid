@@ -46,11 +46,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import io.druid.indexer.TaskLocation;
 import io.druid.indexer.TaskStatus;
 import io.druid.indexing.common.TaskInfoProvider;
-<<<<<<< HEAD
-=======
-import io.druid.indexing.common.TaskStatus;
 import io.druid.indexing.common.stats.RowIngestionMetersFactory;
->>>>>>> 684b5d18c1... Moving averages for ingestion row stats (#5748)
 import io.druid.indexing.common.task.Task;
 import io.druid.indexing.common.task.TaskResource;
 import io.druid.indexing.kafka.KafkaDataSourceMetadata;
@@ -2219,7 +2215,6 @@ public class KafkaSupervisor implements Supervisor
     };
   }
 
-<<<<<<< HEAD
   @VisibleForTesting
   @Nullable
   TaskGroup removeTaskGroup(int taskGroupId)
@@ -2241,7 +2236,6 @@ public class KafkaSupervisor implements Supervisor
   {
     return notices.size();
   }
-=======
   /**
    * Collect row ingestion stats from all tasks managed by this supervisor.
    *
@@ -2342,6 +2336,4 @@ public class KafkaSupervisor implements Supervisor
       return stats;
     }
   }
-
->>>>>>> 684b5d18c1... Moving averages for ingestion row stats (#5748)
 }

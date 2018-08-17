@@ -19,7 +19,7 @@
 
 package io.druid.indexing.common.stats;
 
-import com.amazonaws.thirdparty.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class RowIngestionMetersTotals

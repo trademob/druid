@@ -461,8 +461,6 @@ public abstract class IncrementalIndex<AggregatorType> implements Iterable<Row>,
 
   protected abstract double getMetricDoubleValue(int rowOffset, int aggOffset);
 
-  protected abstract boolean isNull(int rowOffset, int aggOffset);
-
   public static class TimeAndDimsResult
   {
     private TimeAndDims timeAndDims;
