@@ -222,13 +222,7 @@ public class SuppressedAggregatorFactory extends AggregatorFactory
     {
       return delegate.getDouble();
     }
-
-    @Override
-    public boolean isNull()
-    {
-      return delegate.isNull();
-    }
-
+    
     @Override
     public void close()
     {
@@ -331,12 +325,6 @@ public class SuppressedAggregatorFactory extends AggregatorFactory
     public void relocate(int oldPosition, int newPosition, ByteBuffer oldBuffer, ByteBuffer newBuffer)
     {
       delegate.relocate(oldPosition, newPosition, oldBuffer, newBuffer);
-    }
-
-    @Override
-    public boolean isNull(ByteBuffer buf, int position)
-    {
-      return delegate.isNull(buf, position);
     }
 
     @Override
