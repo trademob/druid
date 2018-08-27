@@ -2548,7 +2548,6 @@ public class KafkaSupervisorTest extends EasyMockSupport
     );
   }
 
-
   private static DataSchema getDataSchema(String dataSource)
   {
     List<DimensionSchema> dimensions = new ArrayList<>();
