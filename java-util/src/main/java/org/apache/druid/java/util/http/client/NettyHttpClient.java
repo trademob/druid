@@ -25,6 +25,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import org.apache.druid.java.util.common.IAE;
+import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.lifecycle.LifecycleStart;
 import org.apache.druid.java.util.common.lifecycle.LifecycleStop;
@@ -71,13 +72,6 @@ public class NettyHttpClient extends AbstractHttpClient
   private final ResourcePool<String, ChannelFuture> pool;
   private final HttpClientConfig.CompressionCodec compressionCodec;
   private final Duration defaultReadTimeout;
-
-  public NettyHttpClient(
-      ResourcePool<String, ChannelFuture> pool
-  )
-  {
-    this(pool, null, HttpClientConfig.DEFAULT_COMPRESSION_CODEC, null);
-  }
 
   NettyHttpClient(
       ResourcePool<String, ChannelFuture> pool,
@@ -138,6 +132,7 @@ public class NettyHttpClient extends AbstractHttpClient
       );
     } else {
       channel = channelFuture.getChannel();
+      channel.setReadable(true);
     }
     final String urlFile = StringUtils.nullToEmptyNonDruidDataString(url.getFile());
     final HttpRequest httpRequest = new DefaultHttpRequest(
@@ -181,6 +176,8 @@ public class NettyHttpClient extends AbstractHttpClient
         LAST_HANDLER_NAME,
         new SimpleChannelUpstreamHandler()
         {
+          private long chunkNum = 0;
+          private long suspendChunkNum = -1;
           private volatile ClientResponse<Intermediate> response = null;
 
           @Override
@@ -198,10 +195,20 @@ public class NettyHttpClient extends AbstractHttpClient
                   log.debug("[%s] Got response: %s", requestDesc, httpResponse.getStatus());
                 }
 
-                response = handler.handleResponse(httpResponse);
+                HttpResponseHandler.TrafficCop trafficCop = resumeChunkNum -> {
+                  if (resumeChunkNum >= suspendChunkNum) {
+                    log.debug("[%s] Resuming reads from channel (chunkNum = %,d).", requestDesc, resumeChunkNum);
+                    channel.setReadable(true);
+                    suspendChunkNum++;
+                  }
+                };
+                response = handler.handleResponse(httpResponse, trafficCop);
                 if (response.isFinished()) {
                   retVal.set((Final) response.getObj());
                 }
+
+                assert chunkNum == 0;
+                possiblySuspendReads(response);
 
                 if (!httpResponse.isChunked()) {
                   finishRequest();
@@ -220,10 +227,11 @@ public class NettyHttpClient extends AbstractHttpClient
                 if (httpChunk.isLast()) {
                   finishRequest();
                 } else {
-                  response = handler.handleChunk(response, httpChunk);
+                  response = handler.handleChunk(response, httpChunk, ++chunkNum);
                   if (response.isFinished() && !retVal.isDone()) {
                     retVal.set((Final) response.getObj());
                   }
+                  possiblySuspendReads(response);
                 }
               } else {
                 throw new IllegalStateException(StringUtils.format("Unknown message type[%s]", msg.getClass()));
@@ -242,22 +250,33 @@ public class NettyHttpClient extends AbstractHttpClient
             }
           }
 
+          private void possiblySuspendReads(ClientResponse<?> response)
+          {
+            if (!response.isContinueReading()) {
+              log.debug("[%s] Suspending reads from channel (chunkNum = %,d).", requestDesc, chunkNum);
+              channel.setReadable(false);
+              suspendChunkNum = chunkNum;
+            }
+          }
+
           private void finishRequest()
           {
             ClientResponse<Final> finalResponse = handler.done(response);
-            if (!finalResponse.isFinished()) {
-              throw new IllegalStateException(
-                  StringUtils.format(
-                      "[%s] Didn't get a completed ClientResponse Object from [%s]",
-                      requestDesc,
-                      handler.getClass()
-                  )
+
+            if (!finalResponse.isFinished() || !finalResponse.isContinueReading()) {
+              throw new ISE(
+                  "[%s] Didn't get a completed ClientResponse Object from [%s] (finished = %s, continueReading = %s)",
+                  requestDesc,
+                  handler.getClass(),
+                  finalResponse.isFinished(),
+                  finalResponse.isContinueReading()
               );
             }
             if (!retVal.isDone()) {
               retVal.set(finalResponse.getObj());
             }
             removeHandlers();
+            channel.setReadable(true);
             channelResourceContainer.returnResource();
           }
 

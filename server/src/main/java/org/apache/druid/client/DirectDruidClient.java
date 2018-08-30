@@ -27,8 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 import com.fasterxml.jackson.jaxrs.smile.SmileMediaTypes;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.io.ByteSource;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -63,7 +63,7 @@ import org.apache.druid.query.ResourceLimitExceededException;
 import org.apache.druid.query.Result;
 import org.apache.druid.query.aggregation.MetricManipulatorFns;
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBufferInputStream;
+import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.handler.codec.http.HttpChunk;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpMethod;
@@ -193,17 +193,23 @@ public class DirectDruidClient<T> implements QueryRunner<T>
       log.debug("Querying queryId[%s] url[%s]", query.getId(), url);
 
       final long requestStartTimeNs = System.nanoTime();
+      final long timeoutAt = query.getContextValue(QUERY_FAIL_TIME);
+      final long maxScatterGatherBytes = QueryContexts.getMaxScatterGatherBytes(query);
+      final long maxQueuedBytes = QueryContexts.getMaxQueuedBytes(query, 0);
+      final boolean usingBackpressure = maxQueuedBytes > 0;
 
-      long timeoutAt = query.getContextValue(QUERY_FAIL_TIME);
-      long maxScatterGatherBytes = QueryContexts.getMaxScatterGatherBytes(query);
-      AtomicLong totalBytesGathered = (AtomicLong) context.get(QUERY_TOTAL_BYTES_GATHERED);
+      // Gathered bytes, total across all connections for this query.
+      final AtomicLong totalBytesGathered = (AtomicLong) context.get(QUERY_TOTAL_BYTES_GATHERED);
 
       final HttpResponseHandler<InputStream, InputStream> responseHandler = new HttpResponseHandler<InputStream, InputStream>()
       {
-        private final AtomicLong byteCount = new AtomicLong(0);
-        private final BlockingQueue<InputStream> queue = new LinkedBlockingQueue<>();
+        private final AtomicLong totalByteCount = new AtomicLong(0);
+        private final AtomicLong queuedByteCount = new AtomicLong(0);
+        private final BlockingQueue<InputStreamHolder> queue = new LinkedBlockingQueue<>();
         private final AtomicBoolean done = new AtomicBoolean(false);
         private final AtomicReference<String> fail = new AtomicReference<>();
+        private final AtomicReference<TrafficCop> trafficCopRef = new AtomicReference<>();
+        private final AtomicLong suspendChunkNum = new AtomicLong(0L);
 
         private QueryMetrics<? super Query<T>> queryMetrics;
         private long responseStartTimeNs;
@@ -217,9 +223,41 @@ public class DirectDruidClient<T> implements QueryRunner<T>
           return queryMetrics;
         }
 
-        @Override
-        public ClientResponse<InputStream> handleResponse(HttpResponse response)
+        /**
+         * Queue a buffer. Returns true if we should keep reading, false otherwise.
+         */
+        private boolean enqueue(ChannelBuffer buffer) throws InterruptedException
         {
+          // Increment queuedByteCount before queueing the object, so queuedByteCount is at least as high as
+          // the actual number of queued bytes at any particular time.
+          final InputStreamHolder holder = InputStreamHolder.fromChannelBuffer(buffer);
+          final long currentQueuedByteCount = queuedByteCount.addAndGet(holder.getLength());
+          queue.put(holder);
+
+          // True if we should keep reading.
+          return !usingBackpressure || currentQueuedByteCount < maxQueuedBytes;
+        }
+
+        private InputStream dequeue() throws InterruptedException
+        {
+          final InputStreamHolder holder = queue.poll(checkQueryTimeout(), TimeUnit.MILLISECONDS);
+          if (holder == null) {
+            throw new RE("Query[%s] url[%s] timed out.", query.getId(), url);
+          }
+
+          final long currentQueuedByteCount = queuedByteCount.addAndGet(-holder.getLength());
+          if (usingBackpressure && currentQueuedByteCount < maxQueuedBytes) {
+            Preconditions.checkNotNull(trafficCopRef.get(), "No TrafficCop, how can this be?")
+                         .resume(suspendChunkNum.get());
+          }
+
+          return holder.getStream();
+        }
+
+        @Override
+        public ClientResponse<InputStream> handleResponse(HttpResponse response, TrafficCop trafficCop)
+        {
+          trafficCopRef.set(trafficCop);
           checkQueryTimeout();
           checkTotalBytesLimit(response.getContent().readableBytes());
 
@@ -227,6 +265,7 @@ public class DirectDruidClient<T> implements QueryRunner<T>
           responseStartTimeNs = System.nanoTime();
           acquireResponseMetrics().reportNodeTimeToFirstByte(responseStartTimeNs - requestStartTimeNs).emit(emitter);
 
+          final boolean continueReading;
           try {
             final String responseContext = response.headers().get("X-Druid-Response-Context");
             // context may be null in case of error or query timeout
@@ -237,7 +276,7 @@ public class DirectDruidClient<T> implements QueryRunner<T>
                   )
               );
             }
-            queue.put(new ChannelBufferInputStream(response.getContent()));
+            continueReading = enqueue(response.getContent());
           }
           catch (final IOException e) {
             log.error(e, "Error parsing response context from url [%s]", url);
@@ -257,7 +296,7 @@ public class DirectDruidClient<T> implements QueryRunner<T>
             Thread.currentThread().interrupt();
             throw Throwables.propagate(e);
           }
-          byteCount.addAndGet(response.getContent().readableBytes());
+          totalByteCount.addAndGet(response.getContent().readableBytes());
           return ClientResponse.finished(
               new SequenceInputStream(
                   new Enumeration<InputStream>()
@@ -285,12 +324,7 @@ public class DirectDruidClient<T> implements QueryRunner<T>
                       }
 
                       try {
-                        InputStream is = queue.poll(checkQueryTimeout(), TimeUnit.MILLISECONDS);
-                        if (is != null) {
-                          return is;
-                        } else {
-                          throw new RE("Query[%s] url[%s] timed out.", query.getId(), url);
-                        }
+                        return dequeue();
                       }
                       catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
@@ -298,13 +332,16 @@ public class DirectDruidClient<T> implements QueryRunner<T>
                       }
                     }
                   }
-              )
+              ),
+              continueReading
           );
         }
 
         @Override
         public ClientResponse<InputStream> handleChunk(
-            ClientResponse<InputStream> clientResponse, HttpChunk chunk
+            ClientResponse<InputStream> clientResponse,
+            HttpChunk chunk,
+            long chunkNum
         )
         {
           checkQueryTimeout();
@@ -314,18 +351,24 @@ public class DirectDruidClient<T> implements QueryRunner<T>
 
           checkTotalBytesLimit(bytes);
 
+          boolean continueReading = true;
           if (bytes > 0) {
             try {
-              queue.put(new ChannelBufferInputStream(channelBuffer));
+              continueReading = enqueue(channelBuffer);
             }
             catch (InterruptedException e) {
               log.error(e, "Unable to put finalizing input stream into Sequence queue for url [%s]", url);
               Thread.currentThread().interrupt();
               throw Throwables.propagate(e);
             }
-            byteCount.addAndGet(bytes);
+            totalByteCount.addAndGet(bytes);
           }
-          return clientResponse;
+
+          if (!continueReading) {
+            suspendChunkNum.set(chunkNum);
+          }
+
+          return ClientResponse.finished(clientResponse.getObj(), continueReading);
         }
 
         @Override
@@ -334,31 +377,28 @@ public class DirectDruidClient<T> implements QueryRunner<T>
           long stopTimeNs = System.nanoTime();
           long nodeTimeNs = stopTimeNs - requestStartTimeNs;
           final long nodeTimeMs = TimeUnit.NANOSECONDS.toMillis(nodeTimeNs);
-          log.debug(
+          log.info(
               "Completed queryId[%s] request to url[%s] with %,d bytes returned in %,d millis [%,f b/s].",
               query.getId(),
               url,
-              byteCount.get(),
+              totalByteCount.get(),
               nodeTimeMs,
-              byteCount.get() / (0.001 * nodeTimeMs) // Floating math; division by zero will yield Inf, not exception
+              // Floating math; division by zero will yield Inf, not exception
+              totalByteCount.get() / (0.001 * nodeTimeMs)
           );
           QueryMetrics<? super Query<T>> responseMetrics = acquireResponseMetrics();
           responseMetrics.reportNodeTime(nodeTimeNs);
-          responseMetrics.reportNodeBytes(byteCount.get());
+          responseMetrics.reportNodeBytes(totalByteCount.get());
           responseMetrics.emit(emitter);
           synchronized (done) {
             try {
               // An empty byte array is put at the end to give the SequenceInputStream.close() as something to close out
               // after done is set to true, regardless of the rest of the stream's state.
-              queue.put(ByteSource.empty().openStream());
+              queue.put(InputStreamHolder.fromChannelBuffer(ChannelBuffers.EMPTY_BUFFER));
             }
             catch (InterruptedException e) {
               log.error(e, "Unable to put finalizing input stream into Sequence queue for url [%s]", url);
               Thread.currentThread().interrupt();
-              throw Throwables.propagate(e);
-            }
-            catch (IOException e) {
-              // This should never happen
               throw Throwables.propagate(e);
             }
             finally {
@@ -384,19 +424,23 @@ public class DirectDruidClient<T> implements QueryRunner<T>
         {
           fail.set(msg);
           queue.clear();
-          queue.offer(new InputStream()
-          {
-            @Override
-            public int read() throws IOException
-            {
-              if (th != null) {
-                throw new IOException(msg, th);
-              } else {
-                throw new IOException(msg);
-              }
-            }
-          });
-
+          queue.offer(
+              InputStreamHolder.fromStream(
+                  new InputStream()
+                  {
+                    @Override
+                    public int read() throws IOException
+                    {
+                      if (th != null) {
+                        throw new IOException(msg, th);
+                      } else {
+                        throw new IOException(msg);
+                      }
+                    }
+                  },
+                  0
+              )
+          );
         }
 
         // Returns remaining timeout or throws exception if timeout already elapsed.
@@ -414,7 +458,9 @@ public class DirectDruidClient<T> implements QueryRunner<T>
 
         private void checkTotalBytesLimit(long bytes)
         {
-          if (maxScatterGatherBytes < Long.MAX_VALUE && totalBytesGathered.addAndGet(bytes) > maxScatterGatherBytes) {
+          if (maxScatterGatherBytes > 0
+              && maxScatterGatherBytes < Long.MAX_VALUE
+              && totalBytesGathered.addAndGet(bytes) > maxScatterGatherBytes) {
             String msg = StringUtils.format(
                 "Query[%s] url[%s] max scatter-gather bytes limit reached.",
                 query.getId(),
