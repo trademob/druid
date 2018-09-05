@@ -1566,7 +1566,6 @@ public class IndexTask extends AbstractTask implements ChatHandler
     @Nullable
     @JsonProperty
     @Override
-    @Nullable
     public Long getMaxTotalRows()
     {
       return maxTotalRows;
