@@ -38,17 +38,39 @@ import org.jboss.netty.handler.codec.http.HttpResponse;
  *
  * Note: if you return a finished ClientResponse object from anything other than the done() method, IntermediateType
  * must be castable to FinalType
+ *
+ * ClientResponses also have a "continueReading" flag used for backpressure. If handleResponse() or handleChunk()
+ * return a ClientResponse with continueReading set to false, then the HTTP client will stop reading soon thereafter.
+ * It may not happen immediately, so be prepared for more handleChunk()s to happen. Any time after returning the
+ * ClientResponse with continueReading set to false, you can
  */
 public interface HttpResponseHandler<IntermediateType, FinalType>
 {
   /**
    * Handles the initial HttpResponse object that comes back from Netty.
    *
-   * @param response - response from Netty
-   * @return
+   * @param response   response from Netty
+   * @param trafficCop flow controller
    */
-  ClientResponse<IntermediateType> handleResponse(HttpResponse response);
-  ClientResponse<IntermediateType> handleChunk(ClientResponse<IntermediateType> clientResponse, HttpChunk chunk);
+  ClientResponse<IntermediateType> handleResponse(HttpResponse response, TrafficCop trafficCop);
+
+  ClientResponse<IntermediateType> handleChunk(
+      ClientResponse<IntermediateType> clientResponse,
+      HttpChunk chunk,
+      long chunkNum
+  );
+
   ClientResponse<FinalType> done(ClientResponse<IntermediateType> clientResponse);
+
   void exceptionCaught(ClientResponse<IntermediateType> clientResponse, Throwable e);
+
+  interface TrafficCop
+  {
+    /**
+     * Call this to resume reading after you have suspended it.
+     *
+     * @param chunkNum this resume call is effective for any chunks with at most this chunkNum.
+     */
+    void resume(long chunkNum);
+  }
 }
