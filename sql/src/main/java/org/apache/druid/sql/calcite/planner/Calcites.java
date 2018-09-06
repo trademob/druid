@@ -19,9 +19,13 @@
 
 package org.apache.druid.sql.calcite.planner;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.Chars;
+import org.apache.druid.sql.calcite.schema.SystemSchema;
+import org.apache.druid.client.TimelineServerView;
+import org.apache.druid.discovery.DruidLeaderClient;
 import org.apache.druid.java.util.common.DateTimes;
 import org.apache.druid.java.util.common.IAE;
 import org.apache.druid.java.util.common.ISE;
@@ -98,11 +102,28 @@ public class Calcites
     return DEFAULT_CHARSET;
   }
 
-  public static SchemaPlus createRootSchema(final Schema druidSchema, final AuthorizerMapper authorizerMapper)
+  public static SchemaPlus createRootSchema(
+      final TimelineServerView serverView,
+      final Schema druidSchema,
+      final AuthorizerMapper authorizerMapper,
+      final DruidLeaderClient coordinatorDruidLeaderClient,
+      final DruidLeaderClient overlordDruidLeaderClient,
+      final ObjectMapper jsonMapper
+  )
   {
     final SchemaPlus rootSchema = CalciteSchema.createRootSchema(false, false).plus();
     rootSchema.add(DruidSchema.NAME, druidSchema);
     rootSchema.add(InformationSchema.NAME, new InformationSchema(rootSchema, authorizerMapper));
+    rootSchema.add(
+        SystemSchema.NAME,
+        new SystemSchema(
+            serverView,
+            authorizerMapper,
+            coordinatorDruidLeaderClient,
+            overlordDruidLeaderClient,
+            jsonMapper
+        )
+    );
     return rootSchema;
   }
 

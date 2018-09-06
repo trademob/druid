@@ -23,7 +23,9 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import org.apache.druid.client.TimelineServerView;
 import org.apache.druid.common.config.NullHandling;
+import org.apache.druid.discovery.DruidLeaderClient;
 import org.apache.druid.hll.HLLCV1;
 import org.apache.druid.java.util.common.DateTimes;
 import org.apache.druid.java.util.common.Intervals;
@@ -107,8 +109,10 @@ import org.apache.druid.sql.calcite.util.CalciteTestBase;
 import org.apache.druid.sql.calcite.util.CalciteTests;
 import org.apache.druid.sql.calcite.util.QueryLogHook;
 import org.apache.druid.sql.calcite.util.SpecificSegmentsQuerySegmentWalker;
+import org.apache.druid.sql.calcite.util.TestServerInventoryView;
 import org.apache.druid.sql.calcite.view.InProcessViewManager;
 import org.apache.calcite.plan.RelOptPlanner;
+import org.easymock.EasyMock;
 import org.hamcrest.CoreMatchers;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -457,6 +461,7 @@ public class CalciteQueryTest extends CalciteTestBase
         ImmutableList.of(),
         ImmutableList.of(
             new Object[]{"druid"},
+            new Object[]{"sys"},
             new Object[]{"INFORMATION_SCHEMA"}
         )
     );
@@ -477,7 +482,11 @@ public class CalciteQueryTest extends CalciteTestBase
             new Object[]{"druid", "bview", "VIEW"},
             new Object[]{"INFORMATION_SCHEMA", "COLUMNS", "SYSTEM_TABLE"},
             new Object[]{"INFORMATION_SCHEMA", "SCHEMATA", "SYSTEM_TABLE"},
-            new Object[]{"INFORMATION_SCHEMA", "TABLES", "SYSTEM_TABLE"}
+            new Object[]{"INFORMATION_SCHEMA", "TABLES", "SYSTEM_TABLE"},
+            new Object[]{"sys", "segment_servers", "SYSTEM_TABLE"},
+            new Object[]{"sys", "segments", "SYSTEM_TABLE"},
+            new Object[]{"sys", "servers", "SYSTEM_TABLE"},
+            new Object[]{"sys", "tasks", "SYSTEM_TABLE"}
         )
     );
 
@@ -496,7 +505,11 @@ public class CalciteQueryTest extends CalciteTestBase
             new Object[]{"druid", "bview", "VIEW"},
             new Object[]{"INFORMATION_SCHEMA", "COLUMNS", "SYSTEM_TABLE"},
             new Object[]{"INFORMATION_SCHEMA", "SCHEMATA", "SYSTEM_TABLE"},
-            new Object[]{"INFORMATION_SCHEMA", "TABLES", "SYSTEM_TABLE"}
+            new Object[]{"INFORMATION_SCHEMA", "TABLES", "SYSTEM_TABLE"},
+            new Object[]{"sys", "segment_servers", "SYSTEM_TABLE"},
+            new Object[]{"sys", "segments", "SYSTEM_TABLE"},
+            new Object[]{"sys", "servers", "SYSTEM_TABLE"},
+            new Object[]{"sys", "tasks", "SYSTEM_TABLE"}
         )
     );
   }
@@ -7441,18 +7454,23 @@ public class CalciteQueryTest extends CalciteTestBase
   ) throws Exception
   {
     final InProcessViewManager viewManager = new InProcessViewManager(CalciteTests.TEST_AUTHENTICATOR_ESCALATOR);
+    final TimelineServerView serverView = new TestServerInventoryView(walker.getSegments());
     final DruidSchema druidSchema = CalciteTests.createMockSchema(conglomerate, walker, plannerConfig, viewManager);
     final DruidOperatorTable operatorTable = CalciteTests.createOperatorTable();
     final ExprMacroTable macroTable = CalciteTests.createExprMacroTable();
+    final DruidLeaderClient druidLeaderClient = EasyMock.createMock(DruidLeaderClient.class);
 
     final PlannerFactory plannerFactory = new PlannerFactory(
         druidSchema,
+        serverView,
         CalciteTests.createMockQueryLifecycleFactory(walker, conglomerate),
         operatorTable,
         macroTable,
         plannerConfig,
         CalciteTests.TEST_AUTHORIZER_MAPPER,
-        CalciteTests.getJsonMapper()
+        CalciteTests.getJsonMapper(),
+        druidLeaderClient,
+        druidLeaderClient
     );
 
     viewManager.createView(
